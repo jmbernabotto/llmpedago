@@ -13,6 +13,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
+import pandas as pd # Assurez-vous que pandas est importé
+import plotly.colors as pc # Pour les couleurs
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -304,6 +306,47 @@ def create_prediction_chart(predictions, num_words_predicted):
     
     return fig
 
+def get_token_data_for_table(tokenization_result):
+    """Prépare les données des tokens pour un affichage tabulaire."""
+    if not tokenization_result or 'error' in tokenization_result or not tokenization_result.get('tokens'):
+        return pd.DataFrame()
+
+    tokens_ids = tokenization_result['tokens']
+    token_strings = tokenization_result['token_strings']
+    
+    # Crée un DataFrame pour une meilleure lisibilité
+    df = pd.DataFrame({
+        'ID du Token': tokens_ids,
+        'Token (texte)': token_strings,
+        'Position': range(1, len(tokens_ids) + 1)
+    })
+    return df
+
+def create_colored_token_html(tokenization_result):
+    """Crée une représentation HTML de la phrase avec des tokens colorés."""
+    if not tokenization_result or 'error' in tokenization_result or not tokenization_result.get('token_strings'):
+        return ""
+
+    token_strings = tokenization_result['token_strings']
+    
+    # Générer une palette de couleurs distinctes
+    if len(token_strings) <= 10:
+        colors = pc.qualitative.Plotly[:len(token_strings)]
+    elif len(token_strings) <= 20:
+        colors = pc.qualitative.Light24[:len(token_strings)]
+    else: # Pour plus de 20 tokens, on cycle sur une palette plus large
+        base_colors = pc.qualitative.Alphabet
+        colors = [base_colors[i % len(base_colors)] for i in range(len(token_strings))]
+
+    html_parts = []
+    for i, token_str in enumerate(token_strings):
+        color = colors[i % len(colors)] # Cycle à travers les couleurs si plus de tokens que de couleurs
+        # Échapper les caractères HTML spéciaux dans le token avant de l'insérer
+        safe_token_str = pd.io.formats.html.escape(token_str)
+        html_parts.append(f'<span style="background-color: {color}; color: black; padding: 2px 5px; margin: 2px; border-radius: 3px; display: inline-block;">{safe_token_str}</span>')
+    
+    return " ".join(html_parts)
+
 def main():
     st.set_page_config(
         page_title="Analyseur Pédagogique GPT-4o-mini", 
@@ -389,13 +432,29 @@ def main():
     if 'tokenization' in st.session_state and st.session_state.tokenization:
         st.markdown("---")
         st.markdown("### 🔍 Résultats de Tokenisation")
-        col_data, col_viz = st.columns([1, 2])
-        with col_data:
-            st.json(st.session_state.tokenization)
-        with col_viz:
-            fig = create_token_visualization(st.session_state.tokenization)
-            if fig:
-                st.plotly_chart(fig, use_container_width=True)
+
+        # Option 1: Tableau détaillé des tokens
+        st.markdown("#### Tableau Détaillé des Tokens")
+        token_df = get_token_data_for_table(st.session_state.tokenization)
+        if not token_df.empty:
+            st.dataframe(token_df.set_index('Position')) # Utilise la position comme index pour un meilleur affichage
+        else:
+            st.info("Aucune donnée de token à afficher dans le tableau.")
+
+        # Option 2: Représentation textuelle colorée
+        st.markdown("#### Représentation Textuelle Colorée des Tokens")
+        token_html = create_colored_token_html(st.session_state.tokenization)
+        if token_html:
+            st.markdown(token_html, unsafe_allow_html=True)
+        else:
+            st.info("Impossible de générer la représentation colorée des tokens.")
+        
+        # L'ancien histogramme est maintenant remplacé
+        # st.markdown("#### Visualisation Histogramme des Tokens")
+        # fig_hist = create_token_visualization(st.session_state.tokenization) # Ancien appel
+        # if fig_hist:
+        #     st.pyplot(fig_hist)
+            st.plotly_chart(fig, use_container_width=True)
             else:
                 st.error("Impossible de générer la visualisation des tokens.")
 
