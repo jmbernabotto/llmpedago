@@ -424,11 +424,14 @@ def main():
     analyzer = st.session_state.analyzer
     
     st.markdown("### 📝 Phrase à Analyser")
+    # Assurer que la clé existe dans session_state pour le contrôle
+    if "input_sentence" not in st.session_state:
+        st.session_state.input_sentence = "les cerises sont rouges donc je vais les"
+
     sentence = st.text_area(
         "Entrez votre phrase :",
-        "les cerises sont rouges donc je vais les",
-        height=100,
-        key="input_sentence" # Ajout d'une clé pour une potentielle réinitialisation future
+        key="input_sentence", # Utilisation de la clé pour contrôler la valeur via session_state
+        height=100
     )
     
     # Boutons d'action - Ajout d'une colonne pour le bouton Reset
@@ -471,12 +474,14 @@ def main():
     with col5: # Nouvelle colonne pour le bouton Reset
         if st.button("🔄 Reset", use_container_width=True, key="btn_reset"):
             keys_to_reset = ['tokenization', 'attention', 'predictions', 'num_words_predicted_for_display', 'generated_texts']
-            for key in keys_to_reset:
-                if key in st.session_state:
-                    del st.session_state[key]
-            # Optionnel: réinitialiser le champ de texte. Streamlit ne le fait pas facilement sans réexécution ou astuces.
-            # Pour l'instant, on se contente de vider les résultats.
-            st.rerun() # Force la réexécution pour rafraîchir l'interface après la suppression des clés
+            for key_to_del in keys_to_reset:
+                if key_to_del in st.session_state:
+                    del st.session_state[key_to_del]
+            
+            # Réinitialiser le champ de texte en vidant sa valeur dans session_state
+            st.session_state.input_sentence = "" 
+            
+            st.rerun() # Force la réexécution pour rafraîchir l'interface
 
     # Affichage des résultats
     if 'tokenization' in st.session_state and st.session_state.tokenization:
