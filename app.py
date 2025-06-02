@@ -450,10 +450,11 @@ def main():
     with col3:
         if st.button("🎲 Prédire Mots", use_container_width=True, key="btn_predict"):
             if sentence:
-                num_words_to_predict = 1  # Valeur fixe
-                top_k_predictions = 5     # Valeur fixe
+                num_words_to_predict = 1  # Nombre de mots à prédire dans chaque séquence (ex: 1 pour le prochain mot)
+                top_k_predictions = 5     # Nombre de prédictions alternatives à obtenir pour cette position
                 st.session_state.predictions = analyzer.predict_next_words(sentence, num_words_to_predict, top_k_predictions)
-                st.session_state.num_words_predicted_for_display = num_words_to_predict # Pour l'affichage du titre du graphique
+                # Mettre à jour pour refléter le nombre de prédictions à afficher (top_k)
+                st.session_state.num_words_predicted_for_display = top_k_predictions 
             else:
                 st.warning("Veuillez entrer une phrase pour la prédiction.")
     
