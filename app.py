@@ -14,6 +14,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
 import html # <--- AJOUTER CET IMPORT
+import time
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -505,6 +506,7 @@ def main():
                 else:
                     with st.spinner("Analyse d'attention en cours..."):
                         st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
+                        time.sleep(3) # Ajout d'un délai de 3 secondes pour le test
                     if 'predictions' in st.session_state: del st.session_state.predictions
                     if 'generated_texts' in st.session_state: del st.session_state.generated_texts
                     st.rerun()
@@ -567,6 +569,7 @@ def main():
             if st.session_state.input_sentence:
                 with st.spinner("Analyse d'attention en cours..."):
                     st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
+                    time.sleep(3) # Ajout d'un délai de 3 secondes pour le test (pour le bouton contextuel aussi)
                 if 'predictions' in st.session_state: del st.session_state.predictions
                 if 'generated_texts' in st.session_state: del st.session_state.generated_texts
                 st.rerun() 
