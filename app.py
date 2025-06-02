@@ -141,7 +141,9 @@ class TextAnalyzer:
             return sorted_unique_predictions[:top_k]
             
         except Exception as e:
-            st.error(f"Erreur API OpenAI pour la prédiction : {e}")
+            error_message = f"Erreur API OpenAI pour la prédiction : {e}"
+            print(f"[LOG PREDICT ERROR] {error_message}") # Ajout du log dans la console
+            st.error(error_message)
             return []
     
     def generate_continuation(self, sentence, max_length=50, num_sequences=3):
