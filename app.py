@@ -449,14 +449,10 @@ def main():
         else:
             st.info("Impossible de générer la représentation colorée des tokens.")
         
-        # L'ancien histogramme est maintenant remplacé
-        # st.markdown("#### Visualisation Histogramme des Tokens")
-        # fig_hist = create_token_visualization(st.session_state.tokenization) # Ancien appel
-        # if fig_hist:
-        #     st.pyplot(fig_hist)
-            st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.error("Impossible de générer la visualisation des tokens.")
+        # Les lignes suivantes doivent être supprimées :
+        # st.plotly_chart(fig, use_container_width=True)
+        #     else:
+        #         st.error("Impossible de générer la visualisation des tokens.")
 
     if 'attention' in st.session_state and st.session_state.attention:
         st.markdown("---")
