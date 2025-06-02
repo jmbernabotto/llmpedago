@@ -170,7 +170,7 @@ class TextAnalyzer:
                         messages=[
                             {
                                 "role": "system",
-                                "content": f"Tu es un assistant d'écriture. À partir de la phrase fournie : '{base_for_generation}', continue d'écrire pour produire un texte qui, au total (phrase de départ incluse), fait environ {target_word_count} mots. Le texte doit être cohérent et naturel. Retourne le texte complet (phrase de départ + continuation)."
+                                "content": f"Tu es un assistant d'écriture. À partir de la phrase fournie : '{base_for_generation}', continue d'écrire pour produire un texte qui, au total (phrase de départ incluse), fait environ {target_word_count} mots. Le texte doit être cohérent, naturel et se terminer par un point. Retourne le texte complet (phrase de départ + continuation)."
                             },
                             {
                                 "role": "user",
