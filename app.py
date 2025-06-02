@@ -25,8 +25,6 @@ from openai import OpenAI
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 
-analyzer = TextAnalyzer(openai_api_key=OPENAI_API_KEY)
-
 # Définition des fonctions utilitaires (create_token_visualization, etc.)
 class TextAnalyzer:
     def __init__(self, openai_api_key: str):
