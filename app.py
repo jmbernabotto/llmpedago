@@ -189,7 +189,7 @@ class TextAnalyzer:
         except Exception as e:
             st.error(f"Erreur lors de la génération des textes étendus : {e}")
             return []
-    
+
 def create_token_visualization(tokenization_result):
     """Crée une visualisation interactive des tokens avec couleurs distinctes"""
     if 'error' in tokenization_result:
@@ -387,6 +387,15 @@ def create_colored_token_html(tokenization_result):
     
     return " ".join(html_parts)
 
+def reset_session_state():
+    """Fonction pour réinitialiser les parties pertinentes de st.session_state."""
+    keys_to_reset = ['tokenization', 'attention', 'predictions', 'num_words_predicted_for_display', 'generated_texts']
+    for key_to_del in keys_to_reset:
+        if key_to_del in st.session_state:
+            del st.session_state[key_to_del]
+    # Réinitialiser le champ de texte
+    st.session_state.input_sentence = ""
+
 def main():
     st.set_page_config(
         page_title="Analyseur Pédagogique GPT-4o-mini", 
@@ -424,64 +433,58 @@ def main():
     analyzer = st.session_state.analyzer
     
     st.markdown("### 📝 Phrase à Analyser")
-    # Assurer que la clé existe dans session_state pour le contrôle
+    # Assurer que la clé existe dans session_state pour le contrôle et l'initialisation
     if "input_sentence" not in st.session_state:
         st.session_state.input_sentence = "les cerises sont rouges donc je vais les"
 
+    # La variable 'sentence' récupère la valeur actuelle de st.session_state.input_sentence
+    # grâce à la clé. Toute modification par l'utilisateur met à jour st.session_state.input_sentence.
     sentence = st.text_area(
         "Entrez votre phrase :",
-        key="input_sentence", # Utilisation de la clé pour contrôler la valeur via session_state
+        key="input_sentence", 
         height=100
     )
     
-    # Boutons d'action - Ajout d'une colonne pour le bouton Reset
+    # Boutons d'action
     col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
         if st.button("🔍 Tokeniser", use_container_width=True, key="btn_tokenize"):
-            if sentence:
-                st.session_state.tokenization = analyzer.tokenize_sentence_openai(sentence)
+            if st.session_state.input_sentence: # Utiliser la valeur de session_state
+                st.session_state.tokenization = analyzer.tokenize_sentence_openai(st.session_state.input_sentence)
             else:
                 st.warning("Veuillez entrer une phrase pour la tokenisation.")
     
     with col2:
         if st.button("🎯 Analyser Attention", use_container_width=True, key="btn_attention"):
-            if sentence:
-                st.session_state.attention = analyzer.get_important_words_gpt(sentence)
+            if st.session_state.input_sentence: # Utiliser la valeur de session_state
+                st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
             else:
                 st.warning("Veuillez entrer une phrase pour l'analyse d'attention.")
     
     with col3:
         if st.button("🎲 Prédire Mots", use_container_width=True, key="btn_predict"):
-            if sentence:
-                num_words_to_predict = 1  # Nombre de mots à prédire dans chaque séquence (ex: 1 pour le prochain mot)
-                top_k_predictions = 5     # Nombre de prédictions alternatives à obtenir pour cette position
-                st.session_state.predictions = analyzer.predict_next_words(sentence, num_words_to_predict, top_k_predictions)
+            if st.session_state.input_sentence: # Utiliser la valeur de session_state
+                num_words_to_predict = 1  
+                top_k_predictions = 5     
+                st.session_state.predictions = analyzer.predict_next_words(st.session_state.input_sentence, num_words_to_predict, top_k_predictions)
                 st.session_state.num_words_predicted_for_display = top_k_predictions 
             else:
                 st.warning("Veuillez entrer une phrase pour la prédiction.")
     
     with col4:
         if st.button("📝 Générer 5 Textes", use_container_width=True, key="btn_generate_texts"):
-            if sentence:
+            if st.session_state.input_sentence: # Utiliser la valeur de session_state
                 if 'predictions' in st.session_state and st.session_state.predictions:
-                    st.session_state.generated_texts = analyzer.generate_continuation_from_predictions(sentence, st.session_state.predictions)
+                    st.session_state.generated_texts = analyzer.generate_continuation_from_predictions(st.session_state.input_sentence, st.session_state.predictions)
                 else:
                     st.warning("Veuillez d'abord cliquer sur 'Prédire Mots' pour obtenir des prédictions.")
             else:
                 st.warning("Veuillez entrer une phrase pour générer les textes.")
 
-    with col5: # Nouvelle colonne pour le bouton Reset
-        if st.button("🔄 Reset", use_container_width=True, key="btn_reset"):
-            keys_to_reset = ['tokenization', 'attention', 'predictions', 'num_words_predicted_for_display', 'generated_texts']
-            for key_to_del in keys_to_reset:
-                if key_to_del in st.session_state:
-                    del st.session_state[key_to_del]
-            
-            # Réinitialiser le champ de texte en vidant sa valeur dans session_state
-            st.session_state.input_sentence = "" 
-            
-            st.rerun() # Force la réexécution pour rafraîchir l'interface
+    with col5:
+        # Utiliser on_click pour appeler la fonction de réinitialisation
+        st.button("🔄 Reset", use_container_width=True, key="btn_reset", on_click=reset_session_state)
 
     # Affichage des résultats
     if 'tokenization' in st.session_state and st.session_state.tokenization:
