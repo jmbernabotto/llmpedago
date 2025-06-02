@@ -104,16 +104,21 @@ class TextAnalyzer:
     def predict_next_words(self, sentence, num_words=1, top_k=5):
         """Prédiction de plusieurs mots suivants avec GPT-4o-mini"""
         try:
+            # S'assurer que num_words est bien à 1 pour la prédiction d'un seul mot
+            # même si l'appelant pourrait techniquement passer une autre valeur.
+            # Pour ce cas d'usage, nous forçons la prédiction d'un seul mot.
+            effective_num_words = 1 
+
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
                         "role": "system",
-                        "content": f"Tu es un expert en prédiction de texte. Prédis les {num_words} mot(s) suivant(s) les plus probables pour compléter la phrase donnée. Donne {top_k} options différentes et uniques avec leur probabilité estimée. Retourne uniquement un JSON avec format: {{{{ 'predictions': [{{{{ 'sequence': 'mot(s) prédit(s)', 'probabilite': 0.85 }}}}, ...] }}}}"
+                        "content": f"Tu es un expert en prédiction de texte. Prédis EXACTEMENT UN SEUL mot suivant le plus probable pour compléter la phrase donnée. Donne {top_k} options différentes et uniques, chacune étant un mot unique, avec leur probabilité estimée. Retourne uniquement un JSON avec format: {{{{ 'predictions': [{{{{ 'sequence': 'mot_prédit_unique', 'probabilite': 0.85 }}}}, ...] }}}}"
                     },
                     {
                         "role": "user",
-                        "content": f"Prédis les {num_words} mot(s) suivant(s) pour : '{sentence}'"
+                        "content": f"Prédis UN SEUL mot suivant pour : '{sentence}'"
                     }
                 ],
                 temperature=0.3
@@ -122,20 +127,17 @@ class TextAnalyzer:
             result = json.loads(response.choices[0].message.content)
             raw_predictions = result.get('predictions', [])
             
-            # Post-traitement pour garantir l'unicité et le nombre correct de prédictions
             unique_predictions_dict = {}
             for p in raw_predictions:
-                sequence = p['sequence']
-                probability = p['probabilite']
-                # Si la séquence n'est pas déjà vue, ou si la nouvelle probabilité est meilleure
-                if sequence not in unique_predictions_dict or probability > unique_predictions_dict[sequence]:
-                    unique_predictions_dict[sequence] = probability
+                sequence = p['sequence'].strip()
+                # S'assurer que la séquence est un seul mot
+                if sequence and len(sequence.split()) == 1:
+                    probability = p['probabilite']
+                    if sequence not in unique_predictions_dict or probability > unique_predictions_dict[sequence]:
+                        unique_predictions_dict[sequence] = probability
             
-            # Trier par probabilité (décroissante) et prendre les top_k
-            # Convertir le dictionnaire en une liste de tuples (séquence, probabilité)
             sorted_unique_predictions = sorted(unique_predictions_dict.items(), key=lambda item: item[1], reverse=True)
             
-            # Retourner jusqu'à top_k prédictions uniques
             return sorted_unique_predictions[:top_k]
             
         except Exception as e:
@@ -506,7 +508,7 @@ def main():
                 else:
                     with st.spinner("Analyse d'attention en cours..."):
                         st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
-                        time.sleep(3) # Ajout d'un délai de 3 secondes pour le test
+                        time.sleep(0.5) # Ajout d'un délai de 3 secondes pour le test
                     if 'predictions' in st.session_state: del st.session_state.predictions
                     if 'generated_texts' in st.session_state: del st.session_state.generated_texts
                     st.rerun()
@@ -569,7 +571,7 @@ def main():
             if st.session_state.input_sentence:
                 with st.spinner("Analyse d'attention en cours..."):
                     st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
-                    time.sleep(3) # Ajout d'un délai de 3 secondes pour le test (pour le bouton contextuel aussi)
+                    time.sleep(0.5) # Ajout d'un délai de 3 secondes pour le test (pour le bouton contextuel aussi)
                 if 'predictions' in st.session_state: del st.session_state.predictions
                 if 'generated_texts' in st.session_state: del st.session_state.generated_texts
                 st.rerun() 
