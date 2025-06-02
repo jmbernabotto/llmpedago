@@ -267,65 +267,57 @@ def create_attention_heatmap(important_words):
     
     return fig
 
-def create_prediction_histogram(predictions, num_words_display):
-    """Crée un histogramme Plotly des prédictions de mots avec un gradient de couleur."""
-    if not predictions or 'error' in predictions:
-        return go.Figure().update_layout(title="Erreur lors de la récupération des prédictions")
-
-    # Extraire les séquences et leurs probabilités
-    # S'assurer que nous avons des listes et non des tuples pour la manipulation
-    sequences = list(predictions.get('sequences', []))
-    probs = list(predictions.get('probabilities', []))
-    num_words_predicted = predictions.get('num_words', 1)
-
-    if not sequences or not probs:
+def create_prediction_histogram(predictions_list, num_words_display):
+    """Crée un histogramme Plotly des prédictions de mots avec un gradient de couleur.
+    predictions_list: une liste de tuples/listes, ex: [('seq1', 0.8), ('seq2', 0.7), ...]
+    """
+    if not predictions_list:
         return go.Figure().update_layout(title="Aucune prédiction à afficher")
+    
+    # Si predictions_list est un dict avec une clé 'error', c'est une erreur
+    if isinstance(predictions_list, dict) and 'error' in predictions_list:
+        return go.Figure().update_layout(title=f"Erreur: {predictions_list['error']}")
 
-    # Trier les prédictions par probabilité (du plus haut au plus bas)
-    # pour que le gradient soit cohérent si l'ordre initial n'est pas garanti
-    sorted_predictions = sorted(zip(probs, sequences), reverse=True)
-    probs_sorted = [p for p, s in sorted_predictions]
-    sequences_sorted = [s for p, s in sorted_predictions]
+    # Extraire les séquences et leurs probabilités de la liste
+    # La liste est supposée être déjà triée par probabilité par predict_next_words
+    # ou nous pouvons la trier ici si nécessaire.
+    # Pour l'instant, supposons qu'elle est dans l'ordre souhaité ou que l'ordre n'importe pas avant le tri interne.
+    
+    # Assurons-nous que les éléments sont des paires (séquence, probabilité)
+    try:
+        # Trier par probabilité (deuxième élément de la paire), du plus haut au plus bas
+        sorted_predictions = sorted(predictions_list, key=lambda x: x[1], reverse=True)
+    except (IndexError, TypeError) as e:
+        return go.Figure().update_layout(title=f"Format de prédictions incorrect: {e}")
+
+    sequences_all = [item[0] for item in sorted_predictions]
+    probs_all = [item[1] for item in sorted_predictions]
+
+    if not sequences_all or not probs_all:
+        return go.Figure().update_layout(title="Aucune prédiction valide à afficher")
 
     # Limiter au nombre de mots à afficher
-    sequences_display = sequences_sorted[:num_words_display]
-    probs_display = probs_sorted[:num_words_display]
+    sequences_display = sequences_all[:num_words_display]
+    probs_display = probs_all[:num_words_display]
 
     if not probs_display:
         return go.Figure().update_layout(title="Aucune prédiction à afficher après filtrage")
 
     # Générer les couleurs avec un gradient de rouge (plus probable) à vert (moins probable)
     colors = []
-    # Normaliser les probabilités affichées pour le gradient
     min_prob_display = min(probs_display) if probs_display else 0
     max_prob_display = max(probs_display) if probs_display else 1
 
     for prob in probs_display:
-        # Normaliser la probabilité entre 0 (moins probable) et 1 (plus probable)
         if max_prob_display == min_prob_display:
-            norm_prob = 0.5 # Cas où toutes les probabilités sont égales
+            norm_prob = 0.5
         else:
             norm_prob = (prob - min_prob_display) / (max_prob_display - min_prob_display)
         
-        # Interpolation de couleur: rouge (255,0,0) à vert (0,255,0)
-        # norm_prob = 1 -> rouge pur (ou proche, pour éviter le rouge vif)
-        # norm_prob = 0 -> vert pur (ou proche)
-        # Nous inversons la logique pour que la probabilité la plus élevée (norm_prob proche de 1) soit rouge
-        # et la plus basse (norm_prob proche de 0) soit verte.
-
-        # Pour que le plus probable (norm_prob = 1) soit ROUGE et le moins (norm_prob = 0) soit VERT:
-        # Rouge: (1 - norm_prob) * 0 + norm_prob * 255  = norm_prob * 255
-        # Vert: (1 - norm_prob) * 255 + norm_prob * 0 = (1 - norm_prob) * 255
-        # Bleu: 0
-        # Cependant, la convention est souvent rouge = mauvais/chaud, vert = bon/froid.
-        # Si "plus probable" est "bon", alors rouge n'est pas intuitif.
-        # L'utilisateur a demandé rouge (plus probable) à vert (moins probable).
+        red_val = int(200 * norm_prob + 55 * (1 - norm_prob))
+        green_val = int(55 * norm_prob + 200 * (1 - norm_prob))
+        blue_val = 50
         
-        red_val = int(200 * norm_prob + 55 * (1 - norm_prob)) # Tendra vers rouge pour norm_prob = 1
-        green_val = int(55 * norm_prob + 200 * (1 - norm_prob)) # Tendra vers vert pour norm_prob = 0
-        blue_val = 50 # Un peu de bleu pour adoucir
-        
-        # Assurer que les valeurs sont dans la plage 0-255
         red_val = max(0, min(255, red_val))
         green_val = max(0, min(255, green_val))
         
@@ -340,6 +332,9 @@ def create_prediction_histogram(predictions, num_words_display):
         )
     ])
     
+    # Le nombre de mots prédits est implicitement 1 par prédiction individuelle ici
+    # Si num_words_predicted était dans predictions_list, il faudrait l'extraire.
+    # Pour l'instant, on se base sur num_words_display pour le titre.
     title_text = f"🎲 Prédictions des {num_words_display} Mot(s) Suivant(s)" if num_words_display > 1 else "🎲 Prédictions du Mot Suivant"
     
     fig.update_layout(
@@ -512,22 +507,32 @@ def main():
 
     if 'predictions' in st.session_state and st.session_state.predictions:
         st.markdown("---")
-        num_words_display = st.session_state.get('num_words_predicted_for_display', 1)
-        st.markdown(f"### 🎲 Prédictions des {num_words_display} Mot(s) Suivant(s) (Top 5)")
+        # num_words_display est le nombre de prédictions à afficher (top N)
+        # st.session_state.predictions est une liste de [séquence, probabilité]
+        num_words_display = st.session_state.get('num_words_predicted_for_display', 5) # Afficher top 5 par défaut
+        
+        # Le titre doit refléter que ce sont les N meilleures prédictions pour UN mot (ou une courte séquence)
+        # La variable num_words de la fonction predict_next_words (qui est toujours 1) détermine la longueur de chaque séquence prédite.
+        # num_words_display ici est le nombre de ces prédictions (barres) à montrer.
+        st.markdown(f"### 🎲 Top {num_words_display} Prédictions du Mot Suivant") 
+        
         col_data, col_viz = st.columns([1, 2])
+        
         with col_data:
-            # Assurons-nous que les données de prédiction sont correctement formatées pour le DataFrame
-            # predictions est un dict: {'sequences': [...], 'probabilities': [...], 'num_words': ...}
-            if st.session_state.predictions and 'sequences' in st.session_state.predictions and 'probabilities' in st.session_state.predictions:
-                pred_data = {'Séquence': st.session_state.predictions['sequences'][:num_words_display], 
-                             'Probabilité': st.session_state.predictions['probabilities'][:num_words_display]}
-                df = pd.DataFrame(pred_data)
-                st.dataframe(df, use_container_width=True)
+            # st.session_state.predictions est une liste de paires [séquence, probabilité]
+            if st.session_state.predictions and isinstance(st.session_state.predictions, list):
+                # Prendre seulement les num_words_display premières prédictions pour le DataFrame
+                display_data = st.session_state.predictions[:num_words_display]
+                if display_data:
+                    df = pd.DataFrame(display_data, columns=['Séquence', 'Probabilité'])
+                    st.dataframe(df, use_container_width=True)
+                else:
+                    st.info("Aucune donnée de prédiction à afficher dans le tableau.")    
             else:
-                st.info("Aucune donnée de prédiction à afficher dans le tableau.")
+                st.info("Format de données de prédiction inattendu ou vide.")
 
         with col_viz:
-            # Correction du nom de la fonction ici
+            # Passer la liste directement
             fig = create_prediction_histogram(st.session_state.predictions, num_words_display) 
             if fig:
                 st.plotly_chart(fig, use_container_width=True)
