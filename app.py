@@ -435,7 +435,7 @@ def reset_session_state():
 
 def main():
     st.set_page_config(
-        page_title="Analyseur Pédagogique GPT-4o-mini", 
+        page_title="Comprendre les 3 fonctions principales d'un LLM", 
         page_icon="🎓", 
         layout="wide"
     )
@@ -482,18 +482,17 @@ def main():
         height=100
     )
     
-    # Boutons d'action principaux (toujours visibles)
+    # Boutons d'action principaux (toujours visibles en haut)
     col1_main, col2_main, col3_main, col4_main, col5_main = st.columns(5)
     
     with col1_main:
         if st.button("🔍 Tokeniser", use_container_width=True, key="btn_tokenize_main"):
             if st.session_state.input_sentence:
                 st.session_state.tokenization = analyzer.tokenize_sentence_openai(st.session_state.input_sentence)
-                # Effacer les résultats des étapes suivantes pour assurer la cohérence
                 if 'attention' in st.session_state: del st.session_state.attention
                 if 'predictions' in st.session_state: del st.session_state.predictions
                 if 'generated_texts' in st.session_state: del st.session_state.generated_texts
-                # Pas besoin de st.rerun() ici si on ne change pas la visibilité des boutons principaux
+                # st.rerun() # Optionnel: si on veut forcer le rafraîchissement immédiat pour voir le bouton contextuel apparaître
             else:
                 st.warning("Veuillez entrer une phrase pour la tokenisation.")
     
@@ -506,6 +505,7 @@ def main():
                     st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
                     if 'predictions' in st.session_state: del st.session_state.predictions
                     if 'generated_texts' in st.session_state: del st.session_state.generated_texts
+                    # st.rerun()
             else:
                 st.warning("Veuillez entrer une phrase pour l'analyse d'attention.")
     
@@ -520,6 +520,7 @@ def main():
                     st.session_state.predictions = analyzer.predict_next_words(st.session_state.input_sentence, num_words_to_predict, top_k_predictions)
                     st.session_state.num_words_predicted_for_display = top_k_predictions 
                     if 'generated_texts' in st.session_state: del st.session_state.generated_texts
+                    # st.rerun()
             else:
                 st.warning("Veuillez entrer une phrase pour la prédiction.")
     
@@ -530,82 +531,94 @@ def main():
                     st.warning("Veuillez d'abord prédire les mots avec succès.")
                 else:
                     st.session_state.generated_texts = analyzer.generate_continuation_from_predictions(st.session_state.input_sentence, st.session_state.predictions)
+                    # st.rerun()
             else:
                 st.warning("Veuillez entrer une phrase pour générer les textes.")
 
     with col5_main:
         st.button("🔄 Reset", use_container_width=True, key="btn_reset", on_click=reset_session_state)
 
-    # Affichage des résultats
+    # --- Affichage des résultats ET des boutons contextuels --- 
+
     if 'tokenization' in st.session_state and st.session_state.tokenization and not st.session_state.tokenization.get('error'):
         st.markdown("---")
         st.markdown("### 🔍 Résultats de Tokenisation")
-
-        # Créer deux colonnes
-        col1, col2 = st.columns(2)
-
-        with col1:
-            # Option 2: Représentation textuelle colorée (DANS LA COLONNE DE GAUCHE)
+        col1_tok_disp, col2_tok_disp = st.columns(2)
+        with col1_tok_disp:
             st.markdown("#### Représentation Textuelle Colorée des Tokens")
             token_html = create_colored_token_html(st.session_state.tokenization)
             if token_html:
                 st.markdown(token_html, unsafe_allow_html=True)
             else:
                 st.info("Impossible de générer la représentation colorée des tokens.")
-
-        with col2:
-            # Option 1: Tableau détaillé des tokens (DANS LA COLONNE DE DROITE)
+        with col2_tok_disp:
             st.markdown("#### Tableau Détaillé des Tokens")
             token_df = get_token_data_for_table(st.session_state.tokenization)
             if not token_df.empty:
-                st.dataframe(token_df.set_index('Position')) # Utilise la position comme index pour un meilleur affichage
+                st.dataframe(token_df.set_index('Position'))
             else:
                 st.info("Aucune donnée de token à afficher dans le tableau.")
         
-        
+        # BOUTON CONTEXTUEL APRÈS TOKENISATION
+        if st.button("🎯 Analyser Attention", use_container_width=True, key="btn_attention_ctx_after_tokenize"):
+            if st.session_state.input_sentence:
+                st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
+                if 'predictions' in st.session_state: del st.session_state.predictions
+                if 'generated_texts' in st.session_state: del st.session_state.generated_texts
+                st.rerun() 
+            else:
+                st.warning("Veuillez entrer une phrase pour l'analyse d'attention.")
 
     if 'attention' in st.session_state and st.session_state.attention:
         st.markdown("---")
         st.markdown("### 🎯 Analyse d'Attention")
-        fig = create_attention_heatmap(st.session_state.attention)
-        if fig:
-            st.plotly_chart(fig, use_container_width=True)
+        fig_attention = create_attention_heatmap(st.session_state.attention)
+        if fig_attention:
+            st.plotly_chart(fig_attention, use_container_width=True)
         else:
             st.error("Impossible de générer l'histogramme d'attention.")
+        
+        # BOUTON CONTEXTUEL APRÈS ANALYSE D'ATTENTION
+        if st.button("🎲 Prédire Mots", use_container_width=True, key="btn_predict_ctx_after_attention"):
+            if st.session_state.input_sentence:
+                num_words_to_predict = 1  
+                top_k_predictions = 5     
+                st.session_state.predictions = analyzer.predict_next_words(st.session_state.input_sentence, num_words_to_predict, top_k_predictions)
+                st.session_state.num_words_predicted_for_display = top_k_predictions
+                if 'generated_texts' in st.session_state: del st.session_state.generated_texts
+                st.rerun() 
+            else:
+                st.warning("Veuillez entrer une phrase pour la prédiction.")
 
     if 'predictions' in st.session_state and st.session_state.predictions:
         st.markdown("---")
-        # num_words_display est le nombre de prédictions à afficher (top N)
-        # st.session_state.predictions est une liste de [séquence, probabilité]
-        num_words_display = st.session_state.get('num_words_predicted_for_display', 5) # Afficher top 5 par défaut
-        
-        # Le titre doit refléter que ce sont les N meilleures prédictions pour UN mot (ou une courte séquence)
-        # La variable num_words de la fonction predict_next_words (qui est toujours 1) détermine la longueur de chaque séquence prédite.
-        # num_words_display ici est le nombre de ces prédictions (barres) à montrer.
+        num_words_display = st.session_state.get('num_words_predicted_for_display', 5)
         st.markdown(f"### 🎲 Top {num_words_display} Prédictions du Mot Suivant") 
-        
-        col_data, col_viz = st.columns([1, 2])
-        
-        with col_data:
-            # st.session_state.predictions est une liste de paires [séquence, probabilité]
+        col_data_pred, col_viz_pred = st.columns([1, 2])
+        with col_data_pred:
             if st.session_state.predictions and isinstance(st.session_state.predictions, list):
-                # Prendre seulement les num_words_display premières prédictions pour le DataFrame
-                display_data = st.session_state.predictions[:num_words_display]
-                if display_data:
-                    df = pd.DataFrame(display_data, columns=['Séquence', 'Probabilité'])
-                    st.dataframe(df, use_container_width=True)
+                display_data_pred = st.session_state.predictions[:num_words_display]
+                if display_data_pred:
+                    df_pred = pd.DataFrame(display_data_pred, columns=['Séquence', 'Probabilité'])
+                    st.dataframe(df_pred, use_container_width=True)
                 else:
                     st.info("Aucune donnée de prédiction à afficher dans le tableau.")    
             else:
                 st.info("Format de données de prédiction inattendu ou vide.")
-
-        with col_viz:
-            # Passer la liste directement
-            fig = create_prediction_histogram(st.session_state.predictions, num_words_display) 
-            if fig:
-                st.plotly_chart(fig, use_container_width=True)
+        with col_viz_pred:
+            fig_pred = create_prediction_histogram(st.session_state.predictions, num_words_display) 
+            if fig_pred:
+                st.plotly_chart(fig_pred, use_container_width=True)
             else:
                 st.error("Impossible de générer le graphique des prédictions.")
+
+        # BOUTON CONTEXTUEL APRÈS PRÉDICTION
+        if st.button("📝 Générer 5 Textes", use_container_width=True, key="btn_generate_ctx_after_predict"):
+            if st.session_state.input_sentence:
+                st.session_state.generated_texts = analyzer.generate_continuation_from_predictions(st.session_state.input_sentence, st.session_state.predictions)
+                st.rerun() 
+            else:
+                st.warning("Veuillez entrer une phrase pour générer les textes.")
 
     if 'generated_texts' in st.session_state and st.session_state.generated_texts:
         st.markdown("---")
