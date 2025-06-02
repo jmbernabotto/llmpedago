@@ -17,6 +17,17 @@ import numpy as np
 # Charger les variables d'environnement
 load_dotenv()
 
+# Récupération sécurisée de la clé
+openai.api_key = st.secrets["OPENAI_API_KEY"]
+
+# Ou pour les nouvelles versions d'OpenAI :
+from openai import OpenAI
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+
+analyzer = TextAnalyzer(openai_api_key=OPENAI_API_KEY)
+
+# Définition des fonctions utilitaires (create_token_visualization, etc.)
 class TextAnalyzer:
     def __init__(self, openai_api_key: str):
         # Configuration OpenAI - Focus sur GPT-4o-mini uniquement
@@ -401,27 +412,15 @@ def main():
         st.markdown("---")
         st.markdown("### 🔍 Résultats de Tokenisation")
         
-        st.json(st.session_state.tokenization) # Affichage JSON original
+        # Affichage JSON (peut être utile pour le débogage)
+        # st.json(st.session_state.tokenization)
 
-        # Représentation Textuelle Colorée des Tokens (supprimée)
-        # token_html = create_colored_token_html(st.session_state.tokenization)
-        # if token_html:
-        #     st.markdown(token_html, unsafe_allow_html=True)
-        
-        # Tableau Détaillé des Tokens (supprimé)
-        # token_df = get_token_data_for_table(st.session_state.tokenization)
-        # if not token_df.empty:
-        #     st.dataframe(token_df)
-        # else:
-        #     st.info("Aucune donnée de token à afficher dans le tableau.")
-        
         st.markdown("#### Visualisation Histogramme des Tokens")
-        # Assurez-vous que la fonction create_token_visualization est bien définie et renvoie une figure matplotlib
-        fig_hist = create_token_visualization(st.session_state.tokenization) 
+        fig_hist = create_token_visualization(st.session_state.tokenization)
         if fig_hist:
             st.pyplot(fig_hist)
-        # else:
-        #     st.error("Impossible de générer la visualisation histogramme des tokens.")
+        else:
+            st.info("Impossible de générer l'histogramme des tokens.")
 
     if 'attention' in st.session_state and st.session_state.attention:
         st.markdown("---")
