@@ -108,7 +108,7 @@ class TextAnalyzer:
                 messages=[
                     {
                         "role": "system",
-                        "content": f"Tu es un expert en prédiction de texte. Prédis les {num_words} mot(s) suivant(s) les plus probables pour compléter la phrase donnée. Donne {top_k} options différentes avec leur probabilité estimée. Retourne uniquement un JSON avec format: {{\"predictions\": [{{"sequence": "mot(s) prédit(s)", "probabilite": 0.85}}, ...]}}"
+                        "content": f"Tu es un expert en prédiction de texte. Prédis les {{num_words}} mot(s) suivant(s) les plus probables pour compléter la phrase donnée. Donne {{top_k}} options différentes et uniques avec leur probabilité estimée. Retourne uniquement un JSON avec format: {{{{predictions: [{{{{sequence: \"mot(s) prédit(s)\", probabilite: 0.85}}}}, ...]}}}}"
                     },
                     {
                         "role": "user",
