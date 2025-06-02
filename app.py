@@ -412,7 +412,7 @@ def create_colored_token_html(tokenization_result):
     elif len(token_strings) <= 20:
         colors = px.colors.qualitative.Light24[:len(token_strings)] # <--- MODIFIER ICI (pc -> px)
     else: # Pour plus de 20 tokens, on cycle sur une palette plus large
-        base_colors = px.colors.qualitative.Alphabet # <--- MODIFIER ICI (pc -> px)
+        base_colors = px.colors.qualitative.Dark24 # <--- MODIFIER ICI (pc -> px)
         colors = [base_colors[i % len(base_colors)] for i in range(len(token_strings))]
 
     html_parts = []
@@ -488,11 +488,12 @@ def main():
     with col1_main:
         if st.button("🔍 Tokeniser", use_container_width=True, key="btn_tokenize_main"):
             if st.session_state.input_sentence:
-                st.session_state.tokenization = analyzer.tokenize_sentence_openai(st.session_state.input_sentence)
+                with st.spinner("Tokenisation en cours..."):
+                    st.session_state.tokenization = analyzer.tokenize_sentence_openai(st.session_state.input_sentence)
                 if 'attention' in st.session_state: del st.session_state.attention
                 if 'predictions' in st.session_state: del st.session_state.predictions
                 if 'generated_texts' in st.session_state: del st.session_state.generated_texts
-                # st.rerun() # Optionnel: si on veut forcer le rafraîchissement immédiat pour voir le bouton contextuel apparaître
+                st.rerun() # Pour afficher les résultats et le bouton contextuel
             else:
                 st.warning("Veuillez entrer une phrase pour la tokenisation.")
     
@@ -502,10 +503,11 @@ def main():
                 if 'tokenization' not in st.session_state or not st.session_state.tokenization or st.session_state.tokenization.get('error'):
                     st.warning("Veuillez d'abord tokeniser une phrase avec succès.")
                 else:
-                    st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
+                    with st.spinner("Analyse d'attention en cours..."):
+                        st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
                     if 'predictions' in st.session_state: del st.session_state.predictions
                     if 'generated_texts' in st.session_state: del st.session_state.generated_texts
-                    # st.rerun()
+                    st.rerun()
             else:
                 st.warning("Veuillez entrer une phrase pour l'analyse d'attention.")
     
@@ -515,12 +517,13 @@ def main():
                 if 'attention' not in st.session_state or not st.session_state.attention:
                     st.warning("Veuillez d'abord analyser l'attention avec succès.")
                 else:
-                    num_words_to_predict = 1  
-                    top_k_predictions = 5     
-                    st.session_state.predictions = analyzer.predict_next_words(st.session_state.input_sentence, num_words_to_predict, top_k_predictions)
-                    st.session_state.num_words_predicted_for_display = top_k_predictions 
+                    with st.spinner("Prédiction des mots en cours..."):
+                        num_words_to_predict = 1  
+                        top_k_predictions = 5     
+                        st.session_state.predictions = analyzer.predict_next_words(st.session_state.input_sentence, num_words_to_predict, top_k_predictions)
+                        st.session_state.num_words_predicted_for_display = top_k_predictions 
                     if 'generated_texts' in st.session_state: del st.session_state.generated_texts
-                    # st.rerun()
+                    st.rerun()
             else:
                 st.warning("Veuillez entrer une phrase pour la prédiction.")
     
@@ -530,8 +533,9 @@ def main():
                 if 'predictions' not in st.session_state or not st.session_state.predictions:
                     st.warning("Veuillez d'abord prédire les mots avec succès.")
                 else:
-                    st.session_state.generated_texts = analyzer.generate_continuation_from_predictions(st.session_state.input_sentence, st.session_state.predictions)
-                    # st.rerun()
+                    with st.spinner("Génération des textes en cours..."):
+                        st.session_state.generated_texts = analyzer.generate_continuation_from_predictions(st.session_state.input_sentence, st.session_state.predictions)
+                    st.rerun()
             else:
                 st.warning("Veuillez entrer une phrase pour générer les textes.")
 
@@ -559,10 +563,10 @@ def main():
             else:
                 st.info("Aucune donnée de token à afficher dans le tableau.")
         
-        # BOUTON CONTEXTUEL APRÈS TOKENISATION
         if st.button("🎯 Analyser Attention", use_container_width=True, key="btn_attention_ctx_after_tokenize"):
             if st.session_state.input_sentence:
-                st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
+                with st.spinner("Analyse d'attention en cours..."):
+                    st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
                 if 'predictions' in st.session_state: del st.session_state.predictions
                 if 'generated_texts' in st.session_state: del st.session_state.generated_texts
                 st.rerun() 
@@ -578,13 +582,13 @@ def main():
         else:
             st.error("Impossible de générer l'histogramme d'attention.")
         
-        # BOUTON CONTEXTUEL APRÈS ANALYSE D'ATTENTION
         if st.button("🎲 Prédire Mots", use_container_width=True, key="btn_predict_ctx_after_attention"):
             if st.session_state.input_sentence:
-                num_words_to_predict = 1  
-                top_k_predictions = 5     
-                st.session_state.predictions = analyzer.predict_next_words(st.session_state.input_sentence, num_words_to_predict, top_k_predictions)
-                st.session_state.num_words_predicted_for_display = top_k_predictions
+                with st.spinner("Prédiction des mots en cours..."):
+                    num_words_to_predict = 1  
+                    top_k_predictions = 5     
+                    st.session_state.predictions = analyzer.predict_next_words(st.session_state.input_sentence, num_words_to_predict, top_k_predictions)
+                    st.session_state.num_words_predicted_for_display = top_k_predictions
                 if 'generated_texts' in st.session_state: del st.session_state.generated_texts
                 st.rerun() 
             else:
@@ -612,10 +616,10 @@ def main():
             else:
                 st.error("Impossible de générer le graphique des prédictions.")
 
-        # BOUTON CONTEXTUEL APRÈS PRÉDICTION
         if st.button("📝 Générer 5 Textes", use_container_width=True, key="btn_generate_ctx_after_predict"):
             if st.session_state.input_sentence:
-                st.session_state.generated_texts = analyzer.generate_continuation_from_predictions(st.session_state.input_sentence, st.session_state.predictions)
+                with st.spinner("Génération des textes en cours..."):
+                    st.session_state.generated_texts = analyzer.generate_continuation_from_predictions(st.session_state.input_sentence, st.session_state.predictions)
                 st.rerun() 
             else:
                 st.warning("Veuillez entrer une phrase pour générer les textes.")
