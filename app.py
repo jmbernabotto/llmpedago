@@ -427,11 +427,12 @@ def main():
     sentence = st.text_area(
         "Entrez votre phrase :",
         "les cerises sont rouges donc je vais les",
-        height=100
+        height=100,
+        key="input_sentence" # Ajout d'une clé pour une potentielle réinitialisation future
     )
     
-    # Boutons d'action
-    col1, col2, col3, col4 = st.columns(4)
+    # Boutons d'action - Ajout d'une colonne pour le bouton Reset
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
         if st.button("🔍 Tokeniser", use_container_width=True, key="btn_tokenize"):
@@ -453,7 +454,6 @@ def main():
                 num_words_to_predict = 1  # Nombre de mots à prédire dans chaque séquence (ex: 1 pour le prochain mot)
                 top_k_predictions = 5     # Nombre de prédictions alternatives à obtenir pour cette position
                 st.session_state.predictions = analyzer.predict_next_words(sentence, num_words_to_predict, top_k_predictions)
-                # Mettre à jour pour refléter le nombre de prédictions à afficher (top_k)
                 st.session_state.num_words_predicted_for_display = top_k_predictions 
             else:
                 st.warning("Veuillez entrer une phrase pour la prédiction.")
@@ -462,12 +462,21 @@ def main():
         if st.button("📝 Générer 5 Textes", use_container_width=True, key="btn_generate_texts"):
             if sentence:
                 if 'predictions' in st.session_state and st.session_state.predictions:
-                    # Appel sans spécifier target_length, utilisera la valeur par défaut de 30
                     st.session_state.generated_texts = analyzer.generate_continuation_from_predictions(sentence, st.session_state.predictions)
                 else:
                     st.warning("Veuillez d'abord cliquer sur 'Prédire Mots' pour obtenir des prédictions.")
             else:
                 st.warning("Veuillez entrer une phrase pour générer les textes.")
+
+    with col5: # Nouvelle colonne pour le bouton Reset
+        if st.button("🔄 Reset", use_container_width=True, key="btn_reset"):
+            keys_to_reset = ['tokenization', 'attention', 'predictions', 'num_words_predicted_for_display', 'generated_texts']
+            for key in keys_to_reset:
+                if key in st.session_state:
+                    del st.session_state[key]
+            # Optionnel: réinitialiser le champ de texte. Streamlit ne le fait pas facilement sans réexécution ou astuces.
+            # Pour l'instant, on se contente de vider les résultats.
+            st.rerun() # Force la réexécution pour rafraîchir l'interface après la suppression des clés
 
     # Affichage des résultats
     if 'tokenization' in st.session_state and st.session_state.tokenization:
