@@ -150,7 +150,7 @@ class TextAnalyzer:
             st.error(f"Erreur API OpenAI pour la génération : {e}")
             return []
 
-    def generate_continuation_from_predictions(self, sentence, predictions, target_word_count=30):
+    def generate_continuation_from_predictions(self, sentence, predictions, target_word_count=40):
         """Génère 5 textes complets d'environ target_word_count mots en utilisant les 5 mots les plus probables."""
         try:
             if not predictions or not isinstance(predictions, list):
