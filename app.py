@@ -108,7 +108,7 @@ class TextAnalyzer:
                 messages=[
                     {
                         "role": "system",
-                        "content": f"Tu es un expert en prédiction de texte. Prédis les {num_words} mot(s) suivant(s) les plus probables pour compléter la phrase donnée. Donne {top_k} options différentes avec leur probabilité estimée. Retourne uniquement un JSON avec format: {{\"predictions\": [{{\"sequence\": \"mot(s) prédit(s)\", \"probabilite\": 0.85}}, ...]}}"
+                        "content": f"Tu es un expert en prédiction de texte. Prédis les {num_words} mot(s) suivant(s) les plus probables pour compléter la phrase donnée. Donne {top_k} options différentes avec leur probabilité estimée. Retourne uniquement un JSON avec format: {{\"predictions\": [{{"sequence": "mot(s) prédit(s)", "probabilite": 0.85}}, ...]}}"
                     },
                     {
                         "role": "user",
@@ -120,7 +120,16 @@ class TextAnalyzer:
             
             result = json.loads(response.choices[0].message.content)
             predictions = result.get('predictions', [])
-            return [(p['sequence'], p['probabilite']) for p in predictions]
+            # Post-processing to ensure uniqueness if the API doesn't guarantee it
+            unique_predictions = []
+            seen_sequences = set()
+            for p in predictions:
+                if p['sequence'] not in seen_sequences:
+                    unique_predictions.append((p['sequence'], p['probabilite']))
+                    seen_sequences.add(p['sequence'])
+                if len(unique_predictions) == top_k:
+                    break
+            return unique_predictions
         except Exception as e:
             st.error(f"Erreur API OpenAI pour la prédiction : {e}")
             return []
