@@ -2,7 +2,7 @@ import streamlit as st
 import openai
 import tiktoken
 import matplotlib.pyplot as plt
-import pandas as pd # S'assurer que pandas est importé
+import pandas as pd
 from collections import Counter
 import re
 import json
@@ -16,7 +16,6 @@ import numpy as np
 
 # Charger les variables d'environnement
 load_dotenv()
-
 # Récupération sécurisée de la clé
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
@@ -24,8 +23,6 @@ openai.api_key = st.secrets["OPENAI_API_KEY"]
 from openai import OpenAI
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-
-# Définition des fonctions utilitaires (create_token_visualization, etc.)
 class TextAnalyzer:
     def __init__(self, openai_api_key: str):
         # Configuration OpenAI - Focus sur GPT-4o-mini uniquement
@@ -307,23 +304,6 @@ def create_prediction_chart(predictions, num_words_predicted):
     
     return fig
 
-def create_token_visualization(tokenization_result):
-    """Prépare les données des tokens pour un affichage tabulaire."""
-    if 'error' in tokenization_result:
-        st.error(f"Erreur de tokenisation: {tokenization_result['error']}")
-        return None
-    
-    positions = list(range(len(tokenization_result['tokens'])))
-    token_strings = tokenization_result['token_strings']
-    token_ids = tokenization_result['tokens']
-    
-    df = pd.DataFrame({
-        'Position': positions,
-        'Token (chaîne)': token_strings,
-        'Token ID': token_ids
-    })
-    return df
-
 def main():
     st.set_page_config(
         page_title="Analyseur Pédagogique GPT-4o-mini", 
@@ -409,16 +389,15 @@ def main():
     if 'tokenization' in st.session_state and st.session_state.tokenization:
         st.markdown("---")
         st.markdown("### 🔍 Résultats de Tokenisation")
-        
-        # Affichage JSON (peut être utile pour le débogage)
-        # st.json(st.session_state.tokenization)
-
-        st.markdown("#### Visualisation Histogramme des Tokens")
-        fig_hist = create_token_visualization(st.session_state.tokenization)
-        if fig_hist:
-            st.pyplot(fig_hist)
-        else:
-            st.info("Impossible de générer l'histogramme des tokens.")
+        col_data, col_viz = st.columns([1, 2])
+        with col_data:
+            st.json(st.session_state.tokenization)
+        with col_viz:
+            fig = create_token_visualization(st.session_state.tokenization)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.error("Impossible de générer la visualisation des tokens.")
 
     if 'attention' in st.session_state and st.session_state.attention:
         st.markdown("---")
