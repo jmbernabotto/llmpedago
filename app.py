@@ -17,6 +17,13 @@ import numpy as np
 # Charger les variables d'environnement
 load_dotenv()
 
+# Récupération sécurisée de la clé
+openai.api_key = st.secrets["OPENAI_API_KEY"]
+
+# Ou pour les nouvelles versions d'OpenAI :
+from openai import OpenAI
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
 class TextAnalyzer:
     def __init__(self, openai_api_key: str):
         # Configuration OpenAI - Focus sur GPT-4o-mini uniquement
