@@ -13,8 +13,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
-import pandas as pd # Assurez-vous que pandas est importé
-import plotly.colors as pc # Pour les couleurs
+import html # <--- AJOUTER CET IMPORT
 
 # Charger les variables d'environnement
 load_dotenv()
@@ -342,7 +341,7 @@ def create_colored_token_html(tokenization_result):
     for i, token_str in enumerate(token_strings):
         color = colors[i % len(colors)] # Cycle à travers les couleurs si plus de tokens que de couleurs
         # Échapper les caractères HTML spéciaux dans le token avant de l'insérer
-        safe_token_str = pd.io.formats.html.escape(token_str)
+        safe_token_str = html.escape(str(token_str)) # <--- MODIFIER CETTE LIGNE (ajout de str() pour s'assurer que c'est une chaîne)
         html_parts.append(f'<span style="background-color: {color}; color: black; padding: 2px 5px; margin: 2px; border-radius: 3px; display: inline-block;">{safe_token_str}</span>')
     
     return " ".join(html_parts)
