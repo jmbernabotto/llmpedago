@@ -108,7 +108,7 @@ class TextAnalyzer:
                 messages=[
                     {
                         "role": "system",
-                        "content": f"Tu es un expert en prédiction de texte. Prédis les {{num_words}} mot(s) suivant(s) les plus probables pour compléter la phrase donnée. Donne {{top_k}} options différentes et uniques avec leur probabilité estimée. Retourne uniquement un JSON avec format: {{{{predictions: [{{{{sequence: \"mot(s) prédit(s)\", probabilite: 0.85}}}}, ...]}}}}"
+                        "content": f"Tu es un expert en prédiction de texte. Prédis les {num_words} mot(s) suivant(s) les plus probables pour compléter la phrase donnée. Donne {top_k} options différentes et uniques avec leur probabilité estimée. Retourne uniquement un JSON avec format: {{{{ 'predictions': [{{{{ 'sequence': 'mot(s) prédit(s)', 'probabilite': 0.85 }}}}, ...] }}}}"
                     },
                     {
                         "role": "user",
@@ -119,17 +119,24 @@ class TextAnalyzer:
             )
             
             result = json.loads(response.choices[0].message.content)
-            predictions = result.get('predictions', [])
-            # Post-processing to ensure uniqueness if the API doesn't guarantee it
-            unique_predictions = []
-            seen_sequences = set()
-            for p in predictions:
-                if p['sequence'] not in seen_sequences:
-                    unique_predictions.append((p['sequence'], p['probabilite']))
-                    seen_sequences.add(p['sequence'])
-                if len(unique_predictions) == top_k:
-                    break
-            return unique_predictions
+            raw_predictions = result.get('predictions', [])
+            
+            # Post-traitement pour garantir l'unicité et le nombre correct de prédictions
+            unique_predictions_dict = {}
+            for p in raw_predictions:
+                sequence = p['sequence']
+                probability = p['probabilite']
+                # Si la séquence n'est pas déjà vue, ou si la nouvelle probabilité est meilleure
+                if sequence not in unique_predictions_dict or probability > unique_predictions_dict[sequence]:
+                    unique_predictions_dict[sequence] = probability
+            
+            # Trier par probabilité (décroissante) et prendre les top_k
+            # Convertir le dictionnaire en une liste de tuples (séquence, probabilité)
+            sorted_unique_predictions = sorted(unique_predictions_dict.items(), key=lambda item: item[1], reverse=True)
+            
+            # Retourner jusqu'à top_k prédictions uniques
+            return sorted_unique_predictions[:top_k]
+            
         except Exception as e:
             st.error(f"Erreur API OpenAI pour la prédiction : {e}")
             return []
