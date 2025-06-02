@@ -408,26 +408,25 @@ def main():
         st.markdown("---")
         st.markdown("### 🔍 Résultats de Tokenisation")
         
-        # Option 1: Affichage JSON (peut être conservé pour débogage ou information brute)
-        # st.json(st.session_state.tokenization)
+        st.json(st.session_state.tokenization) # Affichage JSON original
 
-        st.markdown("#### Représentation Textuelle Colorée des Tokens")
-        token_html = create_colored_token_html(st.session_state.tokenization)
-        if token_html:
-            st.markdown(token_html, unsafe_allow_html=True)
+        # Représentation Textuelle Colorée des Tokens (supprimée)
+        # token_html = create_colored_token_html(st.session_state.tokenization)
+        # if token_html:
+        #     st.markdown(token_html, unsafe_allow_html=True)
         
-        st.markdown("#### Tableau Détaillé des Tokens")
-        token_df = get_token_data_for_table(st.session_state.tokenization)
-        if not token_df.empty:
-            st.dataframe(token_df)
-        else:
-            st.info("Aucune donnée de token à afficher dans le tableau.")
+        # Tableau Détaillé des Tokens (supprimé)
+        # token_df = get_token_data_for_table(st.session_state.tokenization)
+        # if not token_df.empty:
+        #     st.dataframe(token_df)
+        # else:
+        #     st.info("Aucune donnée de token à afficher dans le tableau.")
         
-        # L'histogramme peut être conservé ou commenté/supprimé si non désiré
-        # st.markdown("#### Visualisation Histogramme des Tokens")
-        # fig_hist = create_token_visualization(st.session_state.tokenization) # ancien appel
-        # if fig_hist:
-        # st.pyplot(fig_hist)
+        st.markdown("#### Visualisation Histogramme des Tokens")
+        # Assurez-vous que la fonction create_token_visualization est bien définie et renvoie une figure matplotlib
+        fig_hist = create_token_visualization(st.session_state.tokenization) 
+        if fig_hist:
+            st.pyplot(fig_hist)
         # else:
         #     st.error("Impossible de générer la visualisation histogramme des tokens.")
 
