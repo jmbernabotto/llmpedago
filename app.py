@@ -121,7 +121,7 @@ class TextAnalyzer:
                         "content": f"Prédis UN SEUL mot suivant pour : '{sentence}'"
                     }
                 ],
-                temperature=0.3
+                temperature=0.4 # Anciennement 0.3
             )
             
             result = json.loads(response.choices[0].message.content)
