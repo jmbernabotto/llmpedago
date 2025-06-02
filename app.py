@@ -330,11 +330,11 @@ def create_colored_token_html(tokenization_result):
     
     # Générer une palette de couleurs distinctes
     if len(token_strings) <= 10:
-        colors = pc.qualitative.Plotly[:len(token_strings)]
+        colors = px.colors.qualitative.Plotly[:len(token_strings)] # <--- MODIFIER ICI (pc -> px)
     elif len(token_strings) <= 20:
-        colors = pc.qualitative.Light24[:len(token_strings)]
+        colors = px.colors.qualitative.Light24[:len(token_strings)] # <--- MODIFIER ICI (pc -> px)
     else: # Pour plus de 20 tokens, on cycle sur une palette plus large
-        base_colors = pc.qualitative.Alphabet
+        base_colors = px.colors.qualitative.Alphabet # <--- MODIFIER ICI (pc -> px)
         colors = [base_colors[i % len(base_colors)] for i in range(len(token_strings))]
 
     html_parts = []
