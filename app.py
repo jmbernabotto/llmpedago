@@ -231,17 +231,38 @@ def create_token_visualization(tokenization_result):
     return fig
 
 def create_attention_heatmap(important_words):
-    """Crée un histogramme des scores d'attention avec gradient de couleur rouge-vert"""
+    """Crée un histogramme des scores d'attention avec gradient de couleur rouge-vert,
+       en s'assurant que chaque mot n'apparaît qu'une fois avec son score le plus élevé."""
     if not important_words:
         return None
     
-    words = [w['mot'] for w in important_words]
-    scores = [w['score'] for w in important_words]
+    # Agréger les scores pour les mots dupliqués, en gardant le score le plus élevé
+    aggregated_scores = {}
+    for item in important_words:
+        mot = item['mot']
+        score = item['score']
+        if mot in aggregated_scores:
+            aggregated_scores[mot] = max(aggregated_scores[mot], score)
+        else:
+            aggregated_scores[mot] = score
+            
+    # Trier les mots par leur score d'attention (facultatif, mais peut améliorer la lisibilité)
+    # Trié du plus important au moins important
+    sorted_aggregated_scores = dict(sorted(aggregated_scores.items(), key=lambda item: item[1], reverse=True))
+
+    words = list(sorted_aggregated_scores.keys())
+    scores = list(sorted_aggregated_scores.values())
     
+    if not words: # Vérifier si après agrégation, il reste des mots
+        return None
+
     colors = []
+    # Les scores sont maintenant entre 0 et 1, normalisés par le modèle GPT.
+    # Le gradient ira du rouge (score proche de 1) au vert (score proche de 0).
     for score in scores:
-        red = int(255 * score)
-        green = int(255 * (1 - score))
+        # Rouge intense pour score élevé, Vert intense pour score faible
+        red = int(255 * score)        # Plus le score est élevé, plus il y a de rouge
+        green = int(255 * (1 - score)) # Plus le score est bas, plus il y a de vert
         blue = 0
         colors.append(f'rgb({red},{green},{blue})')
     
