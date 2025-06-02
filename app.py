@@ -432,21 +432,21 @@ def main():
         st.markdown("---")
         st.markdown("### 🔍 Résultats de Tokenisation")
 
-        # Option 1: Tableau détaillé des tokens
-        st.markdown("#### Tableau Détaillé des Tokens")
-        token_df = get_token_data_for_table(st.session_state.tokenization)
-        if not token_df.empty:
-            st.dataframe(token_df.set_index('Position')) # Utilise la position comme index pour un meilleur affichage
-        else:
-            st.info("Aucune donnée de token à afficher dans le tableau.")
-
-        # Option 2: Représentation textuelle colorée
+        # Option 2: Représentation textuelle colorée (MAINTENANT EN PREMIER)
         st.markdown("#### Représentation Textuelle Colorée des Tokens")
         token_html = create_colored_token_html(st.session_state.tokenization)
         if token_html:
             st.markdown(token_html, unsafe_allow_html=True)
         else:
             st.info("Impossible de générer la représentation colorée des tokens.")
+
+        # Option 1: Tableau détaillé des tokens (MAINTENANT EN SECOND)
+        st.markdown("#### Tableau Détaillé des Tokens")
+        token_df = get_token_data_for_table(st.session_state.tokenization)
+        if not token_df.empty:
+            st.dataframe(token_df.set_index('Position')) # Utilise la position comme index pour un meilleur affichage
+        else:
+            st.info("Aucune donnée de token à afficher dans le tableau.")
         
         # Les lignes suivantes doivent être supprimées :
         # st.plotly_chart(fig, use_container_width=True)
