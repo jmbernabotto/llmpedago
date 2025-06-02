@@ -267,37 +267,83 @@ def create_attention_heatmap(important_words):
     
     return fig
 
-def create_prediction_chart(predictions, num_words_predicted):
-    """Crée un graphique des prédictions"""
-    if not predictions:
-        return None
-    
-    sequences = [p[0] for p in predictions]
-    probs = [p[1] for p in predictions]
-    
-    max_prob = max(probs) if probs else 1
-    min_prob = min(probs) if probs else 0
-    
+def create_prediction_histogram(predictions, num_words_display):
+    """Crée un histogramme Plotly des prédictions de mots avec un gradient de couleur."""
+    if not predictions or 'error' in predictions:
+        return go.Figure().update_layout(title="Erreur lors de la récupération des prédictions")
+
+    # Extraire les séquences et leurs probabilités
+    # S'assurer que nous avons des listes et non des tuples pour la manipulation
+    sequences = list(predictions.get('sequences', []))
+    probs = list(predictions.get('probabilities', []))
+    num_words_predicted = predictions.get('num_words', 1)
+
+    if not sequences or not probs:
+        return go.Figure().update_layout(title="Aucune prédiction à afficher")
+
+    # Trier les prédictions par probabilité (du plus haut au plus bas)
+    # pour que le gradient soit cohérent si l'ordre initial n'est pas garanti
+    sorted_predictions = sorted(zip(probs, sequences), reverse=True)
+    probs_sorted = [p for p, s in sorted_predictions]
+    sequences_sorted = [s for p, s in sorted_predictions]
+
+    # Limiter au nombre de mots à afficher
+    sequences_display = sequences_sorted[:num_words_display]
+    probs_display = probs_sorted[:num_words_display]
+
+    if not probs_display:
+        return go.Figure().update_layout(title="Aucune prédiction à afficher après filtrage")
+
+    # Générer les couleurs avec un gradient de rouge (plus probable) à vert (moins probable)
     colors = []
-    for prob in probs:
-        normalized = (prob - min_prob) / (max_prob - min_prob) if max_prob != min_prob else 0.5
-        green_intensity = int(50 + normalized * 150)
-        color = f'rgb(0, {green_intensity}, 0)'
-        colors.append(color)
+    # Normaliser les probabilités affichées pour le gradient
+    min_prob_display = min(probs_display) if probs_display else 0
+    max_prob_display = max(probs_display) if probs_display else 1
+
+    for prob in probs_display:
+        # Normaliser la probabilité entre 0 (moins probable) et 1 (plus probable)
+        if max_prob_display == min_prob_display:
+            norm_prob = 0.5 # Cas où toutes les probabilités sont égales
+        else:
+            norm_prob = (prob - min_prob_display) / (max_prob_display - min_prob_display)
+        
+        # Interpolation de couleur: rouge (255,0,0) à vert (0,255,0)
+        # norm_prob = 1 -> rouge pur (ou proche, pour éviter le rouge vif)
+        # norm_prob = 0 -> vert pur (ou proche)
+        # Nous inversons la logique pour que la probabilité la plus élevée (norm_prob proche de 1) soit rouge
+        # et la plus basse (norm_prob proche de 0) soit verte.
+        
+        # Pour que le plus probable (norm_prob = 1) soit ROUGE et le moins (norm_prob = 0) soit VERT:
+        # Rouge: (1 - norm_prob) * 0 + norm_prob * 255  = norm_prob * 255
+        # Vert: (1 - norm_prob) * 255 + norm_prob * 0 = (1 - norm_prob) * 255
+        # Bleu: 0
+        # Cependant, la convention est souvent rouge = mauvais/chaud, vert = bon/froid.
+        # Si "plus probable" est "bon", alors rouge n'est pas intuitif.
+        # L'utilisateur a demandé rouge (plus probable) à vert (moins probable).
+        
+        red_val = int(200 * norm_prob + 55 * (1 - norm_prob)) # Tendra vers rouge pour norm_prob = 1
+        green_val = int(55 * norm_prob + 200 * (1 - norm_prob)) # Tendra vers vert pour norm_prob = 0
+        blue_val = 50 # Un peu de bleu pour adoucir
+        
+        # Assurer que les valeurs sont dans la plage 0-255
+        red_val = max(0, min(255, red_val))
+        green_val = max(0, min(255, green_val))
+        
+        colors.append(f'rgb({red_val},{green_val},{blue_val})')
     
     fig = go.Figure(data=[
         go.Bar(
-            x=sequences,
-            y=probs,
+            x=sequences_display,
+            y=probs_display,
             marker_color=colors,
             hovertemplate='<b>Séquence:</b> %{x}<br><b>Probabilité:</b> %{y:.3f}<extra></extra>'
         )
     ])
     
-    title = f"🎲 Prédictions des {num_words_predicted} Mot(s) Suivant(s)" if num_words_predicted > 1 else "🎲 Prédictions du Mot Suivant"
+    title_text = f"🎲 Prédictions des {num_words_display} Mot(s) Suivant(s)" if num_words_display > 1 else "🎲 Prédictions du Mot Suivant"
     
     fig.update_layout(
-        title=title,
+        title=title_text,
         xaxis_title="Séquences Prédites",
         yaxis_title="Probabilité",
         height=400
@@ -454,6 +500,7 @@ def main():
                 st.info("Aucune donnée de token à afficher dans le tableau.")
         
         
+
     if 'attention' in st.session_state and st.session_state.attention:
         st.markdown("---")
         st.markdown("### 🎯 Analyse d'Attention")
