@@ -312,7 +312,7 @@ def create_prediction_histogram(predictions, num_words_display):
         # norm_prob = 0 -> vert pur (ou proche)
         # Nous inversons la logique pour que la probabilité la plus élevée (norm_prob proche de 1) soit rouge
         # et la plus basse (norm_prob proche de 0) soit verte.
-        
+
         # Pour que le plus probable (norm_prob = 1) soit ROUGE et le moins (norm_prob = 0) soit VERT:
         # Rouge: (1 - norm_prob) * 0 + norm_prob * 255  = norm_prob * 255
         # Vert: (1 - norm_prob) * 255 + norm_prob * 0 = (1 - norm_prob) * 255
@@ -516,10 +516,19 @@ def main():
         st.markdown(f"### 🎲 Prédictions des {num_words_display} Mot(s) Suivant(s) (Top 5)")
         col_data, col_viz = st.columns([1, 2])
         with col_data:
-            df = pd.DataFrame(st.session_state.predictions, columns=['Séquence', 'Probabilité'])
-            st.dataframe(df, use_container_width=True)
+            # Assurons-nous que les données de prédiction sont correctement formatées pour le DataFrame
+            # predictions est un dict: {'sequences': [...], 'probabilities': [...], 'num_words': ...}
+            if st.session_state.predictions and 'sequences' in st.session_state.predictions and 'probabilities' in st.session_state.predictions:
+                pred_data = {'Séquence': st.session_state.predictions['sequences'][:num_words_display], 
+                             'Probabilité': st.session_state.predictions['probabilities'][:num_words_display]}
+                df = pd.DataFrame(pred_data)
+                st.dataframe(df, use_container_width=True)
+            else:
+                st.info("Aucune donnée de prédiction à afficher dans le tableau.")
+
         with col_viz:
-            fig = create_prediction_chart(st.session_state.predictions, num_words_display)
+            # Correction du nom de la fonction ici
+            fig = create_prediction_histogram(st.session_state.predictions, num_words_display) 
             if fig:
                 st.plotly_chart(fig, use_container_width=True)
             else:
