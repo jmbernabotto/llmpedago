@@ -482,69 +482,59 @@ def main():
         height=100
     )
     
-    # Boutons d'action
-    # Les boutons seront affichés conditionnellement
-
-    action_buttons_placeholder = st.empty() # Crée un conteneur pour les boutons
-
-    with action_buttons_placeholder.container():
-        cols = st.columns(5) # Crée 5 colonnes pour les boutons
-
-        with cols[0]:
-            if st.button("🔍 Tokeniser", use_container_width=True, key="btn_tokenize"):
-                if st.session_state.input_sentence:
-                    st.session_state.tokenization = analyzer.tokenize_sentence_openai(st.session_state.input_sentence)
-                    # Effacer les résultats des étapes suivantes lors d'une nouvelle tokenisation
-                    if 'attention' in st.session_state: del st.session_state.attention
+    # Boutons d'action principaux (toujours visibles)
+    col1_main, col2_main, col3_main, col4_main, col5_main = st.columns(5)
+    
+    with col1_main:
+        if st.button("🔍 Tokeniser", use_container_width=True, key="btn_tokenize_main"):
+            if st.session_state.input_sentence:
+                st.session_state.tokenization = analyzer.tokenize_sentence_openai(st.session_state.input_sentence)
+                # Effacer les résultats des étapes suivantes pour assurer la cohérence
+                if 'attention' in st.session_state: del st.session_state.attention
+                if 'predictions' in st.session_state: del st.session_state.predictions
+                if 'generated_texts' in st.session_state: del st.session_state.generated_texts
+                # Pas besoin de st.rerun() ici si on ne change pas la visibilité des boutons principaux
+            else:
+                st.warning("Veuillez entrer une phrase pour la tokenisation.")
+    
+    with col2_main:
+        if st.button("🎯 Analyser Attention", use_container_width=True, key="btn_attention_main"):
+            if st.session_state.input_sentence:
+                if 'tokenization' not in st.session_state or not st.session_state.tokenization or st.session_state.tokenization.get('error'):
+                    st.warning("Veuillez d'abord tokeniser une phrase avec succès.")
+                else:
+                    st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
                     if 'predictions' in st.session_state: del st.session_state.predictions
                     if 'generated_texts' in st.session_state: del st.session_state.generated_texts
-                    st.rerun() # Pour rafraîchir l'affichage des boutons conditionnels
+            else:
+                st.warning("Veuillez entrer une phrase pour l'analyse d'attention.")
+    
+    with col3_main:
+        if st.button("🎲 Prédire Mots", use_container_width=True, key="btn_predict_main"):
+            if st.session_state.input_sentence:
+                if 'attention' not in st.session_state or not st.session_state.attention:
+                    st.warning("Veuillez d'abord analyser l'attention avec succès.")
                 else:
-                    st.warning("Veuillez entrer une phrase pour la tokenisation.")
+                    num_words_to_predict = 1  
+                    top_k_predictions = 5     
+                    st.session_state.predictions = analyzer.predict_next_words(st.session_state.input_sentence, num_words_to_predict, top_k_predictions)
+                    st.session_state.num_words_predicted_for_display = top_k_predictions 
+                    if 'generated_texts' in st.session_state: del st.session_state.generated_texts
+            else:
+                st.warning("Veuillez entrer une phrase pour la prédiction.")
+    
+    with col4_main:
+        if st.button("📝 Générer 5 Textes", use_container_width=True, key="btn_generate_texts_main"):
+            if st.session_state.input_sentence:
+                if 'predictions' not in st.session_state or not st.session_state.predictions:
+                    st.warning("Veuillez d'abord prédire les mots avec succès.")
+                else:
+                    st.session_state.generated_texts = analyzer.generate_continuation_from_predictions(st.session_state.input_sentence, st.session_state.predictions)
+            else:
+                st.warning("Veuillez entrer une phrase pour générer les textes.")
 
-        # Afficher "Analyser Attention" si la tokenisation est faite
-        if 'tokenization' in st.session_state and st.session_state.tokenization and not st.session_state.tokenization.get('error'):
-            with cols[1]:
-                if st.button("🎯 Analyser Attention", use_container_width=True, key="btn_attention"):
-                    if st.session_state.input_sentence:
-                        st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
-                        # Effacer les résultats des étapes suivantes
-                        if 'predictions' in st.session_state: del st.session_state.predictions
-                        if 'generated_texts' in st.session_state: del st.session_state.generated_texts
-                        st.rerun()
-                    else:
-                        st.warning("Veuillez entrer une phrase pour l'analyse d'attention.")
-        
-        # Afficher "Prédire Mots" si l'analyse d'attention est faite
-        if 'attention' in st.session_state and st.session_state.attention:
-            with cols[2]:
-                if st.button("🎲 Prédire Mots", use_container_width=True, key="btn_predict"):
-                    if st.session_state.input_sentence:
-                        num_words_to_predict = 1  
-                        top_k_predictions = 5     
-                        st.session_state.predictions = analyzer.predict_next_words(st.session_state.input_sentence, num_words_to_predict, top_k_predictions)
-                        st.session_state.num_words_predicted_for_display = top_k_predictions 
-                        # Effacer les résultats des étapes suivantes
-                        if 'generated_texts' in st.session_state: del st.session_state.generated_texts
-                        st.rerun()
-                    else:
-                        st.warning("Veuillez entrer une phrase pour la prédiction.")
-
-        # Afficher "Générer 5 Textes" si la prédiction est faite
-        if 'predictions' in st.session_state and st.session_state.predictions:
-            with cols[3]:
-                if st.button("📝 Générer 5 Textes", use_container_width=True, key="btn_generate_texts"):
-                    if st.session_state.input_sentence:
-                        if 'predictions' in st.session_state and st.session_state.predictions:
-                            st.session_state.generated_texts = analyzer.generate_continuation_from_predictions(st.session_state.input_sentence, st.session_state.predictions)
-                            st.rerun()
-                        else:
-                            st.warning("Veuillez d'abord cliquer sur 'Prédire Mots' pour obtenir des prédictions.")
-                    else:
-                        st.warning("Veuillez entrer une phrase pour générer les textes.")
-
-        with cols[4]:
-            st.button("🔄 Reset", use_container_width=True, key="btn_reset", on_click=reset_session_state)
+    with col5_main:
+        st.button("🔄 Reset", use_container_width=True, key="btn_reset", on_click=reset_session_state)
 
     # Affichage des résultats
     if 'tokenization' in st.session_state and st.session_state.tokenization and not st.session_state.tokenization.get('error'):
