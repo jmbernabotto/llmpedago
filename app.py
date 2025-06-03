@@ -109,7 +109,7 @@ class TextAnalyzer:
                 messages=[
                     {
                         "role": "system",
-                        "content": f"Tu es un expert en prédiction de texte. Prédis les {num_words} mot(s) suivant(s) les plus probables pour compléter la phrase donnée. Donne {top_k} options différentes et uniques avec leur probabilité estimée. Retourne uniquement un JSON avec format: {{{{ 'predictions': [{{{{ 'sequence': 'mot(s) prédit(s)', 'probabilite': 0.85 }}}}, ...] }}}}"
+                        "content": f"Tu es un expert en prédiction de texte. Prédis les {num_words} mot(s) suivant(s) les plus probables pour compléter la phrase donnée. Donne {top_k} options différentes et uniques avec leur probabilité estimée. Retourne uniquement un JSON avec format: { 'predictions': [{ 'sequence': 'mot(s) prédit(s)', 'probabilite': 0.85 }, ...] }"
                     },
                     {
                         "role": "user",
@@ -409,11 +409,11 @@ def create_colored_token_html(tokenization_result):
     
     # Générer une palette de couleurs distinctes
     if len(token_strings) <= 10:
-        colors = px.colors.qualitative.Plotly[:len(token_strings)] # <--- MODIFIER ICI (pc -> px)
+        colors = px.colors.qualitative.Plotly[:len(token_strings)] 
     elif len(token_strings) <= 20:
-        colors = px.colors.qualitative.Light24[:len(token_strings)] # <--- MODIFIER ICI (pc -> px)
+        colors = px.colors.qualitative.Light24[:len(token_strings)] 
     else: # Pour plus de 20 tokens, on cycle sur une palette plus large
-        base_colors = px.colors.qualitative.Dark24 # <--- MODIFIER ICI (pc -> px)
+        base_colors = px.colors.qualitative.Dark24 
         colors = [base_colors[i % len(base_colors)] for i in range(len(token_strings))]
 
     html_parts = []
@@ -506,7 +506,7 @@ def main():
                 else:
                     with st.spinner("Analyse d'attention en cours..."):
                         st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
-                        time.sleep(0.5) # Ajout d'un délai de 3 secondes pour le test
+                        #time.sleep(0.5) # Ajout d'un délai de 0.5 secondes pour le test
                     if 'predictions' in st.session_state: del st.session_state.predictions
                     if 'generated_texts' in st.session_state: del st.session_state.generated_texts
                     st.rerun()
@@ -569,7 +569,7 @@ def main():
             if st.session_state.input_sentence:
                 with st.spinner("Analyse d'attention en cours..."):
                     st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
-                    time.sleep(0.5) # Ajout d'un délai de 3 secondes pour le test (pour le bouton contextuel aussi)
+                    #time.sleep(0.5) # Ajout d'un délai de 0.5 secondes pour le test (pour le bouton contextuel aussi)
                 if 'predictions' in st.session_state: del st.session_state.predictions
                 if 'generated_texts' in st.session_state: del st.session_state.generated_texts
                 st.rerun() 
