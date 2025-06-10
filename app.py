@@ -621,7 +621,7 @@ def main():
     
     st.markdown("""
     <div style="background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); padding: 2rem; border-radius: 10px; margin-bottom: 2rem;">
-        <h1 style="color: white; text-align: center; margin: 0;">🎓 Comprendre les LLM avec GPT-4.1</h1>
+        <h1 style="color: white; text-align: center; margin: 0;">🎓 Comprendre les LLM</h1>
         <p style="color: white; text-align: center; margin: 0.5rem 0 0 0;">Exploration Interactive de la Tokenisation et de l'IA Générative</p>
     </div>
     """, unsafe_allow_html=True)
