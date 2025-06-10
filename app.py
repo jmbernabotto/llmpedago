@@ -48,11 +48,26 @@ class TextAnalyzer:
         self.model_priority = ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4o-mini']
         self.model = self._get_available_model()
         
-        # Adaptation de l'encoding selon le modèle
-        if 'gpt-4.1' in self.model:
-            self.encoding_name = 'o200k_base'  # GPT-4.1 utilise probablement le même encoding
-        else:
-            self.encoding_name = 'o200k_base'  # GPT-4o-mini utilise o200k_base
+        # Définir l'encoding approprié
+        self.encoding_name = 'o200k_base'  # GPT-4.1 et GPT-4o utilisent o200k_base
+        self.encoding = None
+        self._initialize_encoding()
+    
+    def _initialize_encoding(self):
+        """Initialise l'encoding de manière robuste"""
+        try:
+            self.encoding = tiktoken.get_encoding(self.encoding_name)
+            st.info(f"✅ Encoding {self.encoding_name} initialisé")
+        except Exception as e:
+            st.error(f"❌ Erreur d'initialisation de l'encoding : {e}")
+            # Fallback sur cl100k_base si o200k_base échoue
+            try:
+                self.encoding = tiktoken.get_encoding('cl100k_base')
+                self.encoding_name = 'cl100k_base'
+                st.warning("⚠️ Utilisation de l'encoding de fallback : cl100k_base")
+            except Exception as e2:
+                st.error(f"❌ Impossible d'initialiser un encoding : {e2}")
+                self.encoding = None
     
     def _get_available_model(self):
         """Détermine le meilleur modèle disponible"""
@@ -62,12 +77,13 @@ class TextAnalyzer:
                 test_response = self.client.chat.completions.create(
                     model=model,
                     messages=[{"role": "user", "content": "Hi"}],
-                    max_tokens=1
+                    max_tokens=5,
+                    timeout=10
                 )
                 st.success(f"✅ Modèle {model} utilisé avec succès !")
                 return model
             except Exception as e:
-                st.warning(f"⚠️ Modèle {model} non disponible : {str(e)}")
+                st.warning(f"⚠️ Modèle {model} non disponible : {str(e)[:100]}...")
                 continue
         
         # Fallback sur gpt-4o-mini par défaut
@@ -92,20 +108,25 @@ class TextAnalyzer:
     
     def tokenize_sentence_openai(self, sentence):
         """Tokenisation avec le modèle sélectionné"""
+        if not self.encoding:
+            return {'error': 'Encoding non initialisé'}
+        
         try:
-            encoding = tiktoken.encoding_for_model(self.model)
-            tokens = encoding.encode(sentence)
+            tokens = self.encoding.encode(sentence)
             
             token_strings = []
             for token in tokens:
                 try:
-                    token_bytes = encoding.decode_single_token_bytes(token)
+                    token_bytes = self.encoding.decode_single_token_bytes(token)
                     token_string = token_bytes.decode('utf-8')
                 except UnicodeDecodeError:
                     token_string = f"<bytes:{token_bytes.hex()}>"
+                except Exception:
+                    # Fallback pour les tokens qui ne peuvent pas être décodés
+                    token_string = f"<token_id:{token}>"
                 token_strings.append(token_string)
             
-            decoded_text = encoding.decode(tokens)
+            decoded_text = self.encoding.decode(tokens)
             
             return {
                 'model': self.model,
@@ -117,6 +138,7 @@ class TextAnalyzer:
                 'is_lossless': decoded_text == sentence
             }
         except Exception as e:
+            st.error(f"Erreur de tokenisation : {e}")
             return {'error': str(e)}
     
     def get_important_words_gpt(self, sentence):
