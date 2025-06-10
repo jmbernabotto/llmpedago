@@ -195,14 +195,31 @@ Ne pas inclure d'explications, seulement le JSON."""
     def predict_next_words(self, sentence, num_words=1, top_k=5):
         """Prédiction de plusieurs mots suivants avec le modèle sélectionné"""
         try:
-            # Prompt optimisé pour GPT-4.1 avec instructions très précises
+            # Prompt très spécifique pour un seul mot
             system_prompt = f"""Tu es un expert en prédiction de texte utilisant {self.model}. 
-            
-TÂCHE: Prédis les {num_words} mot(s) suivant(s) les plus probables pour compléter la phrase donnée.
-NOMBRE: Donne exactement {top_k} options différentes et uniques.
-PROBABILITÉS: Estime chaque probabilité entre 0 et 1.
 
-FORMAT DE RÉPONSE: Retourne UNIQUEMENT un JSON valide avec ce format exact:
+TÂCHE CRUCIALE: Prédis EXACTEMENT UN SEUL MOT qui suit logiquement la phrase donnée.
+
+RÈGLES STRICTES:
+- UN seul mot par prédiction (pas de phrases ou groupes de mots)
+- Même les articles (le, la, les, un, une, des) comptent comme UN mot
+- Les contractions (l', d', n') comptent comme UN mot
+- Pas d'espaces dans les prédictions
+- {top_k} prédictions différentes et uniques
+- Probabilités entre 0 et 1
+
+EXEMPLES VALIDES:
+- "mange" (verbe)
+- "le" (article)  
+- "très" (adverbe)
+- "l'" (contraction)
+
+EXEMPLES INVALIDES:
+- "le chat" (deux mots)
+- "très bien" (deux mots)
+- "d'accord" (acceptable seulement si c'est un seul token)
+
+FORMAT DE RÉPONSE: Retourne UNIQUEMENT un JSON valide:
 {{
     "predictions": [
         {{"sequence": "mot1", "probabilite": 0.85}},
@@ -211,13 +228,7 @@ FORMAT DE RÉPONSE: Retourne UNIQUEMENT un JSON valide avec ce format exact:
         {{"sequence": "mot4", "probabilite": 0.55}},
         {{"sequence": "mot5", "probabilite": 0.45}}
     ]
-}}
-
-IMPORTANT: 
-- Ne pas inclure d'explications
-- Seulement le JSON
-- Chaque séquence doit être unique
-- Trier par probabilité décroissante"""
+}}"""
             
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -228,11 +239,11 @@ IMPORTANT:
                     },
                     {
                         "role": "user",
-                        "content": f"Prédis les {num_words} mot(s) suivant(s) pour : '{sentence}'"
+                        "content": f"Prédis le mot suivant pour : '{sentence}'"
                     }
                 ],
                 temperature=0.3,
-                max_tokens=500
+                max_tokens=300
             )
             
             content = response.choices[0].message.content.strip()
@@ -247,7 +258,7 @@ IMPORTANT:
             result = json.loads(content)
             raw_predictions = result.get('predictions', [])
             
-            # Validation et nettoyage des prédictions
+            # Validation stricte pour UN SEUL MOT
             valid_predictions = []
             seen_sequences = set()
             
@@ -256,14 +267,50 @@ IMPORTANT:
                     sequence = str(p['sequence']).strip()
                     probability = float(p['probabilite'])
                     
-                    # Éviter les doublons et valider les probabilités
-                    if sequence and sequence not in seen_sequences and 0 <= probability <= 1:
+                    # Validation stricte : UN SEUL MOT
+                    # Compter les mots en ignorant les apostrophes qui font partie d'un mot
+                    words_in_sequence = sequence.split()
+                    
+                    # Si plusieurs mots, prendre seulement le premier et avertir
+                    if len(words_in_sequence) > 1:
+                        st.warning(f"Prédiction tronquée de '{sequence}' à '{words_in_sequence[0]}'")
+                        sequence = words_in_sequence[0]
+                        words_in_sequence = [sequence]
+                    
+                    is_single_word = len(words_in_sequence) == 1
+                    
+                    # Vérifier qu'il n'y a pas d'espaces multiples cachés
+                    has_multiple_spaces = '  ' in sequence or sequence != sequence.strip()
+                    
+                    # Validation finale
+                    if (sequence and 
+                        sequence not in seen_sequences and 
+                        0 <= probability <= 1 and 
+                        is_single_word and 
+                        not has_multiple_spaces and
+                        len(sequence) > 0 and
+                        sequence.replace("'", "").replace("-", "").isalpha()):  # Vérifier que c'est bien un mot
+                        
                         valid_predictions.append((sequence, probability))
                         seen_sequences.add(sequence)
+                        
+                    else:
+                        # Debug : afficher pourquoi la prédiction a été rejetée
+                        if len(words_in_sequence) > 1:
+                            st.warning(f"Prédiction rejetée (plusieurs mots) : '{sequence}'")
+                        elif sequence in seen_sequences:
+                            st.warning(f"Prédiction rejetée (doublon) : '{sequence}'")
+                        elif not (0 <= probability <= 1):
+                            st.warning(f"Prédiction rejetée (probabilité invalide) : '{sequence}' ({probability})")
             
             # Trier par probabilité décroissante et limiter à top_k
             valid_predictions.sort(key=lambda x: x[1], reverse=True)
-            return valid_predictions[:top_k]
+            final_predictions = valid_predictions[:top_k]
+            
+            if len(final_predictions) < top_k:
+                st.info(f"Seulement {len(final_predictions)} prédictions valides obtenues sur {top_k} demandées")
+            
+            return final_predictions
             
         except json.JSONDecodeError as e:
             st.error(f"Erreur de parsing JSON pour la prédiction : {e}")
