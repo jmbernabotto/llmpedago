@@ -1,5 +1,4 @@
 import streamlit as st
-import openai
 import tiktoken
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -13,22 +12,37 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
-import html # <--- AJOUTER CET IMPORT
+import html
 import time
 
 # Charger les variables d'environnement
 load_dotenv()
-# Récupération sécurisée de la clé
-openai.api_key = st.secrets["OPENAI_API_KEY"]
 
-# Ou pour les nouvelles versions d'OpenAI :
+# Configuration OpenAI - Version mise à jour
 from openai import OpenAI
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+# Configuration de la clé API
+def get_openai_client():
+    """Initialise le client OpenAI de manière sécurisée"""
+    try:
+        # Essayer d'abord avec st.secrets
+        api_key = st.secrets.get("OPENAI_API_KEY")
+        if not api_key:
+            # Puis avec les variables d'environnement
+            api_key = os.getenv('OPENAI_API_KEY')
+        
+        if api_key:
+            return OpenAI(api_key=api_key), api_key
+        else:
+            return None, None
+    except Exception as e:
+        st.error(f"Erreur lors de la récupération de la clé API : {e}")
+        return None, None
 
 class TextAnalyzer:
     def __init__(self, openai_api_key: str):
         # Configuration OpenAI - Focus sur GPT-4o-mini uniquement
-        self.client = openai.OpenAI(api_key=openai_api_key)
+        self.client = OpenAI(api_key=openai_api_key)
         self.model = 'gpt-4o-mini'  # Modèle unique pour la pédagogie
         self.encoding_name = 'o200k_base'
     
@@ -85,18 +99,32 @@ class TextAnalyzer:
                 messages=[
                     {
                         "role": "system",
-                        "content": "Tu es un expert en analyse linguistique. Analyse la phrase et donne un score d'importance (0-1) pour CHAQUE mot de la phrase, y compris les articles, prépositions, etc. Tous les mots doivent être inclus dans l'analyse. Retourne uniquement un JSON avec format: {{\"mots\": [{{\"mot\": \"word\", \"score\": 0.95}}, ...]}}"
+                        "content": "Tu es un expert en analyse linguistique. Analyse la phrase et donne un score d'importance (0-1) pour CHAQUE mot de la phrase, y compris les articles, prépositions, etc. Tous les mots doivent être inclus dans l'analyse. Retourne uniquement un JSON valide avec format: {\"mots\": [{\"mot\": \"word\", \"score\": 0.95}, ...]}"
                     },
                     {
                         "role": "user",
                         "content": f"Analyse TOUS les mots de cette phrase : '{sentence}'"
                     }
                 ],
-                temperature=0
+                temperature=0,
+                max_tokens=1000  # Ajout d'une limite de tokens
             )
             
-            result = json.loads(response.choices[0].message.content)
+            content = response.choices[0].message.content.strip()
+            
+            # Nettoyage du contenu pour s'assurer qu'il s'agit d'un JSON valide
+            if content.startswith('```json'):
+                content = content[7:]
+            if content.endswith('```'):
+                content = content[:-3]
+            content = content.strip()
+            
+            result = json.loads(content)
             return result.get('mots', [])
+        except json.JSONDecodeError as e:
+            st.error(f"Erreur de parsing JSON pour l'analyse : {e}")
+            st.error(f"Contenu reçu : {response.choices[0].message.content}")
+            return []
         except Exception as e:
             st.error(f"Erreur API OpenAI pour l'analyse : {e}")
             return []
@@ -104,40 +132,72 @@ class TextAnalyzer:
     def predict_next_words(self, sentence, num_words=1, top_k=5):
         """Prédiction de plusieurs mots suivants avec GPT-4o-mini"""
         try:
+            # Utilisation d'un prompt plus robuste
+            system_prompt = f"""Tu es un expert en prédiction de texte. 
+            Tu dois prédire les {num_words} mot(s) suivant(s) les plus probables pour compléter la phrase donnée. 
+            Donne exactement {top_k} options différentes et uniques avec leur probabilité estimée entre 0 et 1.
+            
+            IMPORTANT: Retourne UNIQUEMENT un JSON valide avec ce format exact:
+            {{
+                "predictions": [
+                    {{"sequence": "mot1", "probabilite": 0.85}},
+                    {{"sequence": "mot2", "probabilite": 0.75}},
+                    {{"sequence": "mot3", "probabilite": 0.65}}
+                ]
+            }}
+            
+            Ne pas inclure d'explications, seulement le JSON."""
+            
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
                         "role": "system",
-                        "content": f"Tu es un expert en prédiction de texte. Prédis les {num_words} mot(s) suivant(s) les plus probables pour compléter la phrase donnée. Donne {top_k} options différentes et uniques avec leur probabilité estimée. Retourne uniquement un JSON avec format: { 'predictions': [{ 'sequence': 'mot(s) prédit(s)', 'probabilite': 0.85 }, ...] }"
+                        "content": system_prompt
                     },
                     {
                         "role": "user",
                         "content": f"Prédis les {num_words} mot(s) suivant(s) pour : '{sentence}'"
                     }
                 ],
-                temperature=0.3
+                temperature=0.3,
+                max_tokens=500
             )
             
-            result = json.loads(response.choices[0].message.content)
+            content = response.choices[0].message.content.strip()
+            
+            # Nettoyage du contenu JSON
+            if content.startswith('```json'):
+                content = content[7:]
+            if content.endswith('```'):
+                content = content[:-3]
+            content = content.strip()
+            
+            result = json.loads(content)
             raw_predictions = result.get('predictions', [])
             
-            # Post-traitement pour garantir l'unicité et le nombre correct de prédictions
-            unique_predictions_dict = {}
+            # Validation et nettoyage des prédictions
+            valid_predictions = []
+            seen_sequences = set()
+            
             for p in raw_predictions:
-                sequence = p['sequence']
-                probability = p['probabilite']
-                # Si la séquence n'est pas déjà vue, ou si la nouvelle probabilité est meilleure
-                if sequence not in unique_predictions_dict or probability > unique_predictions_dict[sequence]:
-                    unique_predictions_dict[sequence] = probability
+                if isinstance(p, dict) and 'sequence' in p and 'probabilite' in p:
+                    sequence = str(p['sequence']).strip()
+                    probability = float(p['probabilite'])
+                    
+                    # Éviter les doublons et valider les probabilités
+                    if sequence and sequence not in seen_sequences and 0 <= probability <= 1:
+                        valid_predictions.append((sequence, probability))
+                        seen_sequences.add(sequence)
             
-            # Trier par probabilité (décroissante) et prendre les top_k
-            # Convertir le dictionnaire en une liste de tuples (séquence, probabilité)
-            sorted_unique_predictions = sorted(unique_predictions_dict.items(), key=lambda item: item[1], reverse=True)
+            # Trier par probabilité décroissante et limiter à top_k
+            valid_predictions.sort(key=lambda x: x[1], reverse=True)
+            return valid_predictions[:top_k]
             
-            # Retourner jusqu'à top_k prédictions uniques
-            return sorted_unique_predictions[:top_k]
-            
+        except json.JSONDecodeError as e:
+            st.error(f"Erreur de parsing JSON pour la prédiction : {e}")
+            st.error(f"Contenu reçu : {response.choices[0].message.content}")
+            return []
         except Exception as e:
             st.error(f"Erreur API OpenAI pour la prédiction : {e}")
             return []
@@ -174,12 +234,20 @@ class TextAnalyzer:
                 st.warning("Aucune prédiction disponible pour générer les textes.")
                 return []
             
-            top_5_sequences = [pred[0] for pred in predictions[:5]]
+            # Prendre les 5 premières prédictions
+            top_5_sequences = [pred[0] for pred in predictions[:5] if len(pred) >= 2]
+            
+            if not top_5_sequences:
+                st.warning("Aucune séquence valide trouvée dans les prédictions.")
+                return []
             
             generated_texts = []
-            for seq in top_5_sequences:
-                if seq:
-                    first_predicted_word = seq.split()[0]
+            for i, seq in enumerate(top_5_sequences):
+                try:
+                    first_predicted_word = seq.split()[0] if seq else ""
+                    if not first_predicted_word:
+                        continue
+                        
                     base_for_generation = f"{sentence} {first_predicted_word}"
                     
                     response = self.client.chat.completions.create(
@@ -187,22 +255,27 @@ class TextAnalyzer:
                         messages=[
                             {
                                 "role": "system",
-                                "content": f"Tu es un assistant d'écriture. À partir de la phrase fournie : '{base_for_generation}', continue d'écrire pour produire un texte qui, au total (phrase de départ incluse), fait environ {target_word_count} mots. Le texte doit être cohérent, naturel et se terminer par un point. Retourne le texte complet (phrase de départ + continuation)."
+                                "content": f"Tu es un assistant d'écriture. Continue le texte suivant pour créer un passage d'environ {target_word_count} mots au total. Le texte doit être cohérent, naturel et se terminer proprement. Retourne uniquement le texte complet (phrase de départ + continuation)."
                             },
                             {
                                 "role": "user",
-                                "content": f"Phrase de départ : '{base_for_generation}'. Continue à écrire."
+                                "content": f"Texte à continuer : '{base_for_generation}'"
                             }
                         ],
                         temperature=0.7,
-                        max_tokens=int(target_word_count * 1.5) 
+                        max_tokens=min(300, int(target_word_count * 2))  # Limite plus conservative
                     )
                     
-                    # La réponse du modèle devrait maintenant être le texte complet.
                     full_text = response.choices[0].message.content.strip()
-                    generated_texts.append(full_text)
+                    if full_text:
+                        generated_texts.append(full_text)
+                        
+                except Exception as e:
+                    st.warning(f"Erreur lors de la génération du texte {i+1} : {e}")
+                    continue
             
             return generated_texts
+            
         except Exception as e:
             st.error(f"Erreur lors de la génération des textes étendus : {e}")
             return []
@@ -420,7 +493,7 @@ def create_colored_token_html(tokenization_result):
     for i, token_str in enumerate(token_strings):
         color = colors[i % len(colors)] # Cycle à travers les couleurs si plus de tokens que de couleurs
         # Échapper les caractères HTML spéciaux dans le token avant de l'insérer
-        safe_token_str = html.escape(str(token_str)) # <--- MODIFIER CETTE LIGNE (ajout de str() pour s'assurer que c'est une chaîne)
+        safe_token_str = html.escape(str(token_str)) # Ajout de str() pour s'assurer que c'est une chaîne
         html_parts.append(f'<span style="background-color: {color}; color: black; padding: 2px 5px; margin: 2px; border-radius: 3px; display: inline-block;">{safe_token_str}</span>')
     
     return " ".join(html_parts)
@@ -449,20 +522,33 @@ def main():
     """, unsafe_allow_html=True)
     
     st.sidebar.header("🔑 Configuration")
-    api_key = os.getenv('OPENAI_API_KEY')
+    
+    # Configuration OpenAI mise à jour
+    client, api_key = get_openai_client()
     
     if api_key:
         st.sidebar.success("✅ Clé API chargée")
     else:
         api_key = st.sidebar.text_input("Clé API OpenAI :", type="password")
+        if api_key:
+            try:
+                client = OpenAI(api_key=api_key)
+                # Test rapide de la clé
+                client.models.list()
+                st.sidebar.success("✅ Clé API valide")
+            except Exception as e:
+                st.sidebar.error(f"❌ Clé API invalide : {e}")
+                client = None
     
-    if not api_key:
-        st.warning("⚠️ Veuillez configurer votre clé API OpenAI.")
+    if not api_key or not client:
+        st.warning("⚠️ Veuillez configurer votre clé API OpenAI valide.")
         return
     
-    if 'analyzer' not in st.session_state:
+    # Initialisation de l'analyseur
+    if 'analyzer' not in st.session_state or st.session_state.get('api_key') != api_key:
         try:
             st.session_state.analyzer = TextAnalyzer(api_key)
+            st.session_state.api_key = api_key
             st.success("✅ Analyseur GPT-4o-mini initialisé !")
         except Exception as e:
             st.error(f"Erreur lors de l'initialisation de l'analyseur : {e}")
@@ -506,7 +592,6 @@ def main():
                 else:
                     with st.spinner("Analyse d'attention en cours..."):
                         st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
-                        #time.sleep(0.5) # Ajout d'un délai de 0.5 secondes pour le test
                     if 'predictions' in st.session_state: del st.session_state.predictions
                     if 'generated_texts' in st.session_state: del st.session_state.generated_texts
                     st.rerun()
@@ -569,7 +654,6 @@ def main():
             if st.session_state.input_sentence:
                 with st.spinner("Analyse d'attention en cours..."):
                     st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
-                    #time.sleep(0.5) # Ajout d'un délai de 0.5 secondes pour le test (pour le bouton contextuel aussi)
                 if 'predictions' in st.session_state: del st.session_state.predictions
                 if 'generated_texts' in st.session_state: del st.session_state.generated_texts
                 st.rerun() 
