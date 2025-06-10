@@ -41,10 +41,38 @@ def get_openai_client():
 
 class TextAnalyzer:
     def __init__(self, openai_api_key: str):
-        # Configuration OpenAI - Focus sur GPT-4o-mini uniquement
+        # Configuration OpenAI - Focus sur GPT-4.1 avec fallback
         self.client = OpenAI(api_key=openai_api_key)
-        self.model = 'gpt-4o-mini'  # Modèle unique pour la pédagogie
-        self.encoding_name = 'o200k_base'
+        
+        # Essayer d'abord GPT-4.1, puis se rabattre sur GPT-4o-mini si non disponible
+        self.model_priority = ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4o-mini']
+        self.model = self._get_available_model()
+        
+        # Adaptation de l'encoding selon le modèle
+        if 'gpt-4.1' in self.model:
+            self.encoding_name = 'o200k_base'  # GPT-4.1 utilise probablement le même encoding
+        else:
+            self.encoding_name = 'o200k_base'  # GPT-4o-mini utilise o200k_base
+    
+    def _get_available_model(self):
+        """Détermine le meilleur modèle disponible"""
+        for model in self.model_priority:
+            try:
+                # Test rapide pour voir si le modèle est disponible
+                test_response = self.client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": "Hi"}],
+                    max_tokens=1
+                )
+                st.success(f"✅ Modèle {model} utilisé avec succès !")
+                return model
+            except Exception as e:
+                st.warning(f"⚠️ Modèle {model} non disponible : {str(e)}")
+                continue
+        
+        # Fallback sur gpt-4o-mini par défaut
+        st.info("📝 Utilisation du modèle de fallback : gpt-4o-mini")
+        return 'gpt-4o-mini'
     
     def analyze_sentence(self, sentence):
         """Analyse complète d'une phrase"""
@@ -63,7 +91,7 @@ class TextAnalyzer:
         return analysis
     
     def tokenize_sentence_openai(self, sentence):
-        """Tokenisation avec GPT-4o-mini uniquement"""
+        """Tokenisation avec le modèle sélectionné"""
         try:
             encoding = tiktoken.encoding_for_model(self.model)
             tokens = encoding.encode(sentence)
@@ -92,14 +120,27 @@ class TextAnalyzer:
             return {'error': str(e)}
     
     def get_important_words_gpt(self, sentence):
-        """Analyse de tous les mots de la phrase avec GPT-4o-mini"""
+        """Analyse de tous les mots de la phrase avec le modèle sélectionné"""
         try:
+            # Prompt optimisé pour GPT-4.1
+            system_prompt = """Tu es un expert en analyse linguistique. Analyse la phrase et donne un score d'importance (0-1) pour CHAQUE mot de la phrase, y compris les articles, prépositions, etc. 
+
+Tous les mots doivent être inclus dans l'analyse. Retourne uniquement un JSON valide avec ce format exact:
+{
+    "mots": [
+        {"mot": "word1", "score": 0.95},
+        {"mot": "word2", "score": 0.85}
+    ]
+}
+
+Ne pas inclure d'explications, seulement le JSON."""
+
             response = self.client.chat.completions.create(
                 model=self.model,
                 messages=[
                     {
                         "role": "system",
-                        "content": "Tu es un expert en analyse linguistique. Analyse la phrase et donne un score d'importance (0-1) pour CHAQUE mot de la phrase, y compris les articles, prépositions, etc. Tous les mots doivent être inclus dans l'analyse. Retourne uniquement un JSON valide avec format: {\"mots\": [{\"mot\": \"word\", \"score\": 0.95}, ...]}"
+                        "content": system_prompt
                     },
                     {
                         "role": "user",
@@ -107,7 +148,7 @@ class TextAnalyzer:
                     }
                 ],
                 temperature=0,
-                max_tokens=1000  # Ajout d'une limite de tokens
+                max_tokens=1000
             )
             
             content = response.choices[0].message.content.strip()
@@ -130,23 +171,31 @@ class TextAnalyzer:
             return []
     
     def predict_next_words(self, sentence, num_words=1, top_k=5):
-        """Prédiction de plusieurs mots suivants avec GPT-4o-mini"""
+        """Prédiction de plusieurs mots suivants avec le modèle sélectionné"""
         try:
-            # Utilisation d'un prompt plus robuste
-            system_prompt = f"""Tu es un expert en prédiction de texte. 
-            Tu dois prédire les {num_words} mot(s) suivant(s) les plus probables pour compléter la phrase donnée. 
-            Donne exactement {top_k} options différentes et uniques avec leur probabilité estimée entre 0 et 1.
+            # Prompt optimisé pour GPT-4.1 avec instructions très précises
+            system_prompt = f"""Tu es un expert en prédiction de texte utilisant {self.model}. 
             
-            IMPORTANT: Retourne UNIQUEMENT un JSON valide avec ce format exact:
-            {{
-                "predictions": [
-                    {{"sequence": "mot1", "probabilite": 0.85}},
-                    {{"sequence": "mot2", "probabilite": 0.75}},
-                    {{"sequence": "mot3", "probabilite": 0.65}}
-                ]
-            }}
-            
-            Ne pas inclure d'explications, seulement le JSON."""
+TÂCHE: Prédis les {num_words} mot(s) suivant(s) les plus probables pour compléter la phrase donnée.
+NOMBRE: Donne exactement {top_k} options différentes et uniques.
+PROBABILITÉS: Estime chaque probabilité entre 0 et 1.
+
+FORMAT DE RÉPONSE: Retourne UNIQUEMENT un JSON valide avec ce format exact:
+{{
+    "predictions": [
+        {{"sequence": "mot1", "probabilite": 0.85}},
+        {{"sequence": "mot2", "probabilite": 0.75}},
+        {{"sequence": "mot3", "probabilite": 0.65}},
+        {{"sequence": "mot4", "probabilite": 0.55}},
+        {{"sequence": "mot5", "probabilite": 0.45}}
+    ]
+}}
+
+IMPORTANT: 
+- Ne pas inclure d'explications
+- Seulement le JSON
+- Chaque séquence doit être unique
+- Trier par probabilité décroissante"""
             
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -203,8 +252,7 @@ class TextAnalyzer:
             return []
     
     def generate_continuation(self, sentence, max_length=50, num_sequences=3):
-        """Génération de suites logiques avec GPT-4o-mini"""
-        # Cette fonction n'est plus directement utilisée par un bouton mais peut être conservée pour un usage futur.
+        """Génération de suites logiques avec le modèle sélectionné"""
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -250,12 +298,23 @@ class TextAnalyzer:
                         
                     base_for_generation = f"{sentence} {first_predicted_word}"
                     
+                    # Prompt optimisé pour GPT-4.1
+                    system_prompt = f"""Tu es un assistant d'écriture expert utilisant {self.model}. 
+
+TÂCHE: Continue le texte pour créer un passage d'environ {target_word_count} mots au total.
+EXIGENCES: 
+- Texte cohérent et naturel
+- Se termine proprement avec une ponctuation appropriée
+- Style fluide et engageant
+
+RÉPONSE: Retourne uniquement le texte complet (phrase de départ + continuation)."""
+                    
                     response = self.client.chat.completions.create(
                         model=self.model,
                         messages=[
                             {
                                 "role": "system",
-                                "content": f"Tu es un assistant d'écriture. Continue le texte suivant pour créer un passage d'environ {target_word_count} mots au total. Le texte doit être cohérent, naturel et se terminer proprement. Retourne uniquement le texte complet (phrase de départ + continuation)."
+                                "content": system_prompt
                             },
                             {
                                 "role": "user",
@@ -263,7 +322,7 @@ class TextAnalyzer:
                             }
                         ],
                         temperature=0.7,
-                        max_tokens=min(300, int(target_word_count * 2))  # Limite plus conservative
+                        max_tokens=min(300, int(target_word_count * 2))
                     )
                     
                     full_text = response.choices[0].message.content.strip()
@@ -311,8 +370,9 @@ def create_token_visualization(tokenization_result):
         )
     ])
     
+    model_name = tokenization_result.get('model', 'GPT-4.1')
     fig.update_layout(
-        title="🔍 Visualisation des Tokens GPT-4o-mini (Couleurs Distinctes)",
+        title=f"🔍 Visualisation des Tokens {model_name} (Couleurs Distinctes)",
         xaxis_title="Position du Token",
         yaxis_title="ID du Token",
         height=400
@@ -321,8 +381,7 @@ def create_token_visualization(tokenization_result):
     return fig
 
 def create_attention_heatmap(important_words):
-    """Crée un histogramme des scores d'attention avec gradient de couleur rouge-vert,
-       en s'assurant que chaque mot n'apparaît qu'une fois avec son score le plus élevé."""
+    """Crée un histogramme des scores d'attention avec gradient de couleur rouge-vert"""
     if not important_words:
         return None
     
@@ -335,24 +394,20 @@ def create_attention_heatmap(important_words):
             aggregated_scores[mot] = max(aggregated_scores[mot], score)
         else:
             aggregated_scores[mot] = score
-            
-    # Trier les mots par leur score d'attention (facultatif, mais peut améliorer la lisibilité)
-    # Trié du plus important au moins important
+    
+    # Trier les mots par leur score d'attention
     sorted_aggregated_scores = dict(sorted(aggregated_scores.items(), key=lambda item: item[1], reverse=True))
-
+    
     words = list(sorted_aggregated_scores.keys())
     scores = list(sorted_aggregated_scores.values())
     
-    if not words: # Vérifier si après agrégation, il reste des mots
+    if not words:
         return None
-
+    
     colors = []
-    # Les scores sont maintenant entre 0 et 1, normalisés par le modèle GPT.
-    # Le gradient ira du rouge (score proche de 1) au vert (score proche de 0).
     for score in scores:
-        # Rouge intense pour score élevé, Vert intense pour score faible
-        red = int(255 * score)        # Plus le score est élevé, plus il y a de rouge
-        green = int(255 * (1 - score)) # Plus le score est bas, plus il y a de vert
+        red = int(255 * score)
+        green = int(255 * (1 - score))
         blue = 0
         colors.append(f'rgb({red},{green},{blue})')
     
@@ -368,7 +423,7 @@ def create_attention_heatmap(important_words):
     ])
     
     fig.update_layout(
-        title="🎯 Histogramme des Scores d'Attention (Rouge = Élevé, Vert = Faible)",
+        title="🎯 Scores d'Attention GPT-4.1 (Rouge = Élevé, Vert = Faible)",
         xaxis_title="Mots",
         yaxis_title="Score d'Attention",
         height=400,
@@ -379,46 +434,34 @@ def create_attention_heatmap(important_words):
     return fig
 
 def create_prediction_histogram(predictions_list, num_words_display):
-    """Crée un histogramme Plotly des prédictions de mots avec un gradient de couleur.
-    predictions_list: une liste de tuples/listes, ex: [('seq1', 0.8), ('seq2', 0.7), ...]
-    """
+    """Crée un histogramme Plotly des prédictions de mots avec un gradient de couleur"""
     if not predictions_list:
         return go.Figure().update_layout(title="Aucune prédiction à afficher")
     
-    # Si predictions_list est un dict avec une clé 'error', c'est une erreur
     if isinstance(predictions_list, dict) and 'error' in predictions_list:
         return go.Figure().update_layout(title=f"Erreur: {predictions_list['error']}")
-
-    # Extraire les séquences et leurs probabilités de la liste
-    # La liste est supposée être déjà triée par probabilité par predict_next_words
-    # ou nous pouvons la trier ici si nécessaire.
-    # Pour l'instant, supposons qu'elle est dans l'ordre souhaité ou que l'ordre n'importe pas avant le tri interne.
     
-    # Assurons-nous que les éléments sont des paires (séquence, probabilité)
     try:
-        # Trier par probabilité (deuxième élément de la paire), du plus haut au plus bas
         sorted_predictions = sorted(predictions_list, key=lambda x: x[1], reverse=True)
     except (IndexError, TypeError) as e:
         return go.Figure().update_layout(title=f"Format de prédictions incorrect: {e}")
-
+    
     sequences_all = [item[0] for item in sorted_predictions]
     probs_all = [item[1] for item in sorted_predictions]
-
+    
     if not sequences_all or not probs_all:
         return go.Figure().update_layout(title="Aucune prédiction valide à afficher")
-
-    # Limiter au nombre de mots à afficher
+    
     sequences_display = sequences_all[:num_words_display]
     probs_display = probs_all[:num_words_display]
-
+    
     if not probs_display:
         return go.Figure().update_layout(title="Aucune prédiction à afficher après filtrage")
-
-    # Générer les couleurs avec un gradient de rouge (plus probable) à vert (moins probable)
+    
     colors = []
     min_prob_display = min(probs_display) if probs_display else 0
     max_prob_display = max(probs_display) if probs_display else 1
-
+    
     for prob in probs_display:
         if max_prob_display == min_prob_display:
             norm_prob = 0.5
@@ -443,10 +486,7 @@ def create_prediction_histogram(predictions_list, num_words_display):
         )
     ])
     
-    # Le nombre de mots prédits est implicitement 1 par prédiction individuelle ici
-    # Si num_words_predicted était dans predictions_list, il faudrait l'extraire.
-    # Pour l'instant, on se base sur num_words_display pour le titre.
-    title_text = f"🎲 Prédictions des {num_words_display} Mot(s) Suivant(s)" if num_words_display > 1 else "🎲 Prédictions du Mot Suivant"
+    title_text = f"🎲 Prédictions GPT-4.1 : Top {num_words_display} Mot(s) Suivant(s)"
     
     fig.update_layout(
         title=title_text,
@@ -458,14 +498,13 @@ def create_prediction_histogram(predictions_list, num_words_display):
     return fig
 
 def get_token_data_for_table(tokenization_result):
-    """Prépare les données des tokens pour un affichage tabulaire."""
+    """Prépare les données des tokens pour un affichage tabulaire"""
     if not tokenization_result or 'error' in tokenization_result or not tokenization_result.get('tokens'):
         return pd.DataFrame()
-
+    
     tokens_ids = tokenization_result['tokens']
     token_strings = tokenization_result['token_strings']
     
-    # Crée un DataFrame pour une meilleure lisibilité
     df = pd.DataFrame({
         'ID du Token': tokens_ids,
         'Token (texte)': token_strings,
@@ -474,49 +513,46 @@ def get_token_data_for_table(tokenization_result):
     return df
 
 def create_colored_token_html(tokenization_result):
-    """Crée une représentation HTML de la phrase avec des tokens colorés."""
+    """Crée une représentation HTML de la phrase avec des tokens colorés"""
     if not tokenization_result or 'error' in tokenization_result or not tokenization_result.get('token_strings'):
         return ""
-
+    
     token_strings = tokenization_result['token_strings']
     
-    # Générer une palette de couleurs distinctes
     if len(token_strings) <= 10:
-        colors = px.colors.qualitative.Plotly[:len(token_strings)] 
+        colors = px.colors.qualitative.Plotly[:len(token_strings)]
     elif len(token_strings) <= 20:
-        colors = px.colors.qualitative.Light24[:len(token_strings)] 
-    else: # Pour plus de 20 tokens, on cycle sur une palette plus large
-        base_colors = px.colors.qualitative.Dark24 
+        colors = px.colors.qualitative.Light24[:len(token_strings)]
+    else:
+        base_colors = px.colors.qualitative.Dark24
         colors = [base_colors[i % len(base_colors)] for i in range(len(token_strings))]
-
+    
     html_parts = []
     for i, token_str in enumerate(token_strings):
-        color = colors[i % len(colors)] # Cycle à travers les couleurs si plus de tokens que de couleurs
-        # Échapper les caractères HTML spéciaux dans le token avant de l'insérer
-        safe_token_str = html.escape(str(token_str)) # Ajout de str() pour s'assurer que c'est une chaîne
+        color = colors[i % len(colors)]
+        safe_token_str = html.escape(str(token_str))
         html_parts.append(f'<span style="background-color: {color}; color: black; padding: 2px 5px; margin: 2px; border-radius: 3px; display: inline-block;">{safe_token_str}</span>')
     
     return " ".join(html_parts)
 
 def reset_session_state():
-    """Fonction pour réinitialiser les parties pertinentes de st.session_state."""
+    """Fonction pour réinitialiser les parties pertinentes de st.session_state"""
     keys_to_reset = ['tokenization', 'attention', 'predictions', 'num_words_predicted_for_display', 'generated_texts']
     for key_to_del in keys_to_reset:
         if key_to_del in st.session_state:
             del st.session_state[key_to_del]
-    # Réinitialiser le champ de texte
     st.session_state.input_sentence = ""
 
 def main():
     st.set_page_config(
-        page_title="Comprendre les 3 fonctions principales d'un LLM", 
+        page_title="Comprendre les 3 fonctions principales d'un LLM avec GPT-4.1", 
         page_icon="🎓", 
         layout="wide"
     )
     
     st.markdown("""
     <div style="background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); padding: 2rem; border-radius: 10px; margin-bottom: 2rem;">
-        <h1 style="color: white; text-align: center; margin: 0;">🎓 Comprendre les 3 fonctions principales d'un LLM</h1>
+        <h1 style="color: white; text-align: center; margin: 0;">🎓 Comprendre les LLM avec GPT-4.1</h1>
         <p style="color: white; text-align: center; margin: 0.5rem 0 0 0;">Exploration Interactive de la Tokenisation et de l'IA Générative</p>
     </div>
     """, unsafe_allow_html=True)
@@ -533,7 +569,6 @@ def main():
         if api_key:
             try:
                 client = OpenAI(api_key=api_key)
-                # Test rapide de la clé
                 client.models.list()
                 st.sidebar.success("✅ Clé API valide")
             except Exception as e:
@@ -549,27 +584,27 @@ def main():
         try:
             st.session_state.analyzer = TextAnalyzer(api_key)
             st.session_state.api_key = api_key
-            st.success("✅ Analyseur GPT-4o-mini initialisé !")
         except Exception as e:
             st.error(f"Erreur lors de l'initialisation de l'analyseur : {e}")
             return
     
     analyzer = st.session_state.analyzer
     
+    # Affichage du modèle utilisé
+    st.sidebar.info(f"🤖 Modèle actuel : **{analyzer.model}**")
+    st.sidebar.info(f"🔧 Encoding : **{analyzer.encoding_name}**")
+    
     st.markdown("### 📝 Phrase à Analyser")
-    # Assurer que la clé existe dans session_state pour le contrôle et l'initialisation
     if "input_sentence" not in st.session_state:
         st.session_state.input_sentence = "les cerises sont rouges donc je vais les"
-
-    # La variable 'sentence' récupère la valeur actuelle de st.session_state.input_sentence
-    # grâce à la clé. Toute modification par l'utilisateur met à jour st.session_state.input_sentence.
+    
     sentence = st.text_area(
         "Entrez votre phrase :",
         key="input_sentence", 
         height=100
     )
     
-    # Boutons d'action principaux (toujours visibles en haut)
+    # Boutons d'action principaux
     col1_main, col2_main, col3_main, col4_main, col5_main = st.columns(5)
     
     with col1_main:
@@ -580,7 +615,7 @@ def main():
                 if 'attention' in st.session_state: del st.session_state.attention
                 if 'predictions' in st.session_state: del st.session_state.predictions
                 if 'generated_texts' in st.session_state: del st.session_state.generated_texts
-                st.rerun() # Pour afficher les résultats et le bouton contextuel
+                st.rerun()
             else:
                 st.warning("Veuillez entrer une phrase pour la tokenisation.")
     
@@ -629,14 +664,13 @@ def main():
     with col5_main:
         st.button("🔄 Reset", use_container_width=True, key="btn_reset", on_click=reset_session_state)
 
-    # --- Affichage des résultats ET des boutons contextuels --- 
-
+    # Affichage des résultats
     if 'tokenization' in st.session_state and st.session_state.tokenization and not st.session_state.tokenization.get('error'):
         st.markdown("---")
         st.markdown("### 🔍 Résultats de Tokenisation")
         col1_tok_disp, col2_tok_disp = st.columns(2)
         with col1_tok_disp:
-            st.markdown("#### Représentation Textuelle Colorée des Tokens")
+            st.markdown("#### Représentation Colorée des Tokens")
             token_html = create_colored_token_html(st.session_state.tokenization)
             if token_html:
                 st.markdown(token_html, unsafe_allow_html=True)
@@ -656,7 +690,7 @@ def main():
                     st.session_state.attention = analyzer.get_important_words_gpt(st.session_state.input_sentence)
                 if 'predictions' in st.session_state: del st.session_state.predictions
                 if 'generated_texts' in st.session_state: del st.session_state.generated_texts
-                st.rerun() 
+                st.rerun()
             else:
                 st.warning("Veuillez entrer une phrase pour l'analyse d'attention.")
 
@@ -677,7 +711,7 @@ def main():
                     st.session_state.predictions = analyzer.predict_next_words(st.session_state.input_sentence, num_words_to_predict, top_k_predictions)
                     st.session_state.num_words_predicted_for_display = top_k_predictions
                 if 'generated_texts' in st.session_state: del st.session_state.generated_texts
-                st.rerun() 
+                st.rerun()
             else:
                 st.warning("Veuillez entrer une phrase pour la prédiction.")
 
@@ -707,7 +741,7 @@ def main():
             if st.session_state.input_sentence:
                 with st.spinner("Génération des textes en cours..."):
                     st.session_state.generated_texts = analyzer.generate_continuation_from_predictions(st.session_state.input_sentence, st.session_state.predictions)
-                st.rerun() 
+                st.rerun()
             else:
                 st.warning("Veuillez entrer une phrase pour générer les textes.")
 
@@ -720,20 +754,23 @@ def main():
     # Informations pédagogiques dans la sidebar
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 📚 Guide Pédagogique")
-    st.sidebar.info("""
+    st.sidebar.info(f"""
     **Étapes d'Analyse :**
     
     1. 🔍 **Tokenisation** : Découpage en tokens.
     2. 🎯 **Attention** : Identification des mots importants.
-    3. 🎲 **Prédiction** : Génération des mots suivants les plus probables.
-    4. 📝 **Génération de Textes** : Création de phrases complètes avec les mots prédits.
+    3. 🎲 **Prédiction** : Génération des mots suivants.
+    4. 📝 **Génération** : Création de textes complets.
     
-    **Modèle utilisé :** GPT-4o-mini
-    **Encoding :** o200k_base
+    **Modèle utilisé :** {analyzer.model}
+    **Context window :** 1M tokens (GPT-4.1)
+    **Knowledge cutoff :** Juin 2024
     
-    **Échelle d'Attention (Histogramme) :**
-    🔴 Rouge foncé = Score d'importance élevé
-    🟢 Vert clair = Score d'importance faible
+    **Avantages GPT-4.1 :**
+    • +21% en codage vs GPT-4o
+    • +10% en suivi d'instructions  
+    • Meilleur contexte long
+    • Moins de latence
     """)
 
 if __name__ == "__main__":
